@@ -1,0 +1,1 @@
+my26r1_stm32h723vgt6\startup_stm32h723xx.o: startup_stm32h723xx.s

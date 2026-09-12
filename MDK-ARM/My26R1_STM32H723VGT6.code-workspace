@@ -1,0 +1,23 @@
+{
+    "folders": [
+        {
+            "path": "."
+        },
+        {
+            "name": "My26R1_STM32H723VGT6",
+            "path": ".."
+        }
+    ],
+    "settings": {
+        "C_Cpp.default.configurationProvider": "",
+        "C_Cpp.default.compileCommands": "E:/1034Robotics/My26R1_STM32H723VGT6/MDK-ARM/build/My26R1_STM32H723VGT6/compile_commands.json",
+        "C_Cpp.default.compilerPath": "F:/Keil5/ARM/ARMCLANG/bin/armclang.exe",
+        "C_Cpp.default.cStandard": "c99",
+        "C_Cpp.default.cppStandard": "c++11",
+        "C_Cpp.default.intelliSenseMode": "gcc-arm",
+        "clangd.enable": false,
+        "C_Cpp_Runner.cCompilerPath": "F:/Keil5/ARM/ARMCLANG/bin/armclang.exe",
+        "C_Cpp_Runner.cppCompilerPath": "F:/Keil5/ARM/ARMCLANG/bin/armclang.exe"
+    },
+    "extensions": {}
+}

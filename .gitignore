@@ -1,0 +1,47 @@
+# STM32 / Keil / EIDE build output
+MDK-ARM/build/
+MDK-ARM/Objects/
+MDK-ARM/Listings/
+MDK-ARM/*.axf
+MDK-ARM/*.elf
+MDK-ARM/*.hex
+MDK-ARM/*.bin
+MDK-ARM/*.map
+MDK-ARM/*.lst
+MDK-ARM/*.htm
+MDK-ARM/*.crf
+MDK-ARM/*.o
+MDK-ARM/*.d
+MDK-ARM/*.dep
+MDK-ARM/*.scvd
+MDK-ARM/*.iex
+
+# EIDE generated metadata and logs
+MDK-ARM/.eide/cache/
+MDK-ARM/.eide/logs/
+MDK-ARM/.vscode/
+MDK-ARM/*.log
+MDK-ARM/*.bak
+MDK-ARM/*.tmp
+
+# Keil user-local files
+MDK-ARM/*.uvguix.*
+MDK-ARM/*.uvoptx
+MDK-ARM/*.uvprojx.bak*
+
+# IDE and OS temporary files
+.vs/
+.vscode/
+*.user
+*.suo
+*.swp
+*.swo
+*.tmp
+*.temp
+*.orig
+*~
+.DS_Store
+Thumbs.db
+
+# Keep source-control metadata and project source files
+!.gitignore
