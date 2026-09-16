@@ -26,5 +26,7 @@ my26r1_stm32h723vgt6/bsp_can.o: ..\bsp\bsp_can.cpp ..\bsp\bsp_can.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_pwr_ex.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_tim.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_tim_ex.h \
+  ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_uart.h \
+  ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_uart_ex.h \
   ..\Core\Inc\fdcan.h ..\Core\Inc\main.h ..\vesc_can\vesc_motor.h \
   ..\dji_can\dji_6020.h

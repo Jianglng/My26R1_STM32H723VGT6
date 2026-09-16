@@ -3,7 +3,10 @@ name: My26R1_STM32H723VGT6
 type: ARM
 deviceName: STM32H723VGTx
 packDir: .pack/Keil/STM32H7xx_DFP.4.1.3
-srcDirs: []
+srcDirs:
+  - ../remote
+  - ../kinematics
+  - ../pid
 virtualFolder:
   name: <virtual_root>
   files: []
@@ -23,7 +26,9 @@ virtualFolder:
                 - path: ../Core/Src/main.c
                 - path: ../Core/Src/gpio.c
                 - path: ../Core/Src/freertos.c
+                - path: ../Core/Src/dma.c
                 - path: ../Core/Src/fdcan.c
+                - path: ../Core/Src/usart.c
                 - path: ../Core/Src/stm32h7xx_it.c
                 - path: ../Core/Src/stm32h7xx_hal_msp.c
                 - path: ../Core/Src/stm32h7xx_hal_timebase_tim.c
@@ -52,6 +57,8 @@ virtualFolder:
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c_ex.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_exti.c
+            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart.c
+            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart_ex.c
           folders: []
         - name: CMSIS
           files:
@@ -83,6 +90,8 @@ virtualFolder:
       files:
         - path: ../bsp/bsp_can.cpp
         - path: ../bsp/bsp_can.h
+        - path: ../bsp/bsp_dwt.cpp
+        - path: ../bsp/bsp_dwt.h
       folders: []
     - name: vesc_can
       files:
@@ -93,6 +102,21 @@ virtualFolder:
       files:
         - path: ../dji_can/dji_6020.cpp
         - path: ../dji_can/dji_6020.h
+      folders: []
+    - name: remote
+      files:
+        - path: ../remote/remote_input.cpp
+        - path: ../remote/remote_input.h
+      folders: []
+    - name: kinematics
+      files:
+        - path: ../kinematics/chassis_kinematics.cpp
+        - path: ../kinematics/chassis_kinematics.h
+      folders: []
+    - name: pid
+      files:
+        - path: ../pid/pid.cpp
+        - path: ../pid/pid.h
       folders: []
     - name: ::CMSIS
       files: []
@@ -117,14 +141,17 @@ targets:
         - ../Drivers/CMSIS/Include
         - ../Middlewares/Third_Party/FreeRTOS/Source/include
         - ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
-        - ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F
         - ../Drivers/CMSIS/RTOS2/Include
         - ../bsp
         - ../vesc_can
         - ../Task
         - ../dji_can
+        - ../remote
+        - ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F
         - .cmsis/include
         - RTE/_My26R1_STM32H723VGT6
+        - ../kinematics
+        - ../pid
       libList: []
     excludeList: []
     settings:
@@ -330,6 +357,6 @@ targets:
       OpenOCD:
         baseAddr: "0x08000000"
         bin: ""
-        interface: stlink
+        interface: cmsis-dap
         target: stm32h7x
     uploader: OpenOCD

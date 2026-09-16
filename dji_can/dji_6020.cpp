@@ -46,22 +46,32 @@ void Dji6020Bus::Control(void)
     BSP_CAN::CheckBusOff(&hfdcan3);
 
     /* --- 收集各电机电流 ---
-     * 用 int32_t 累加、最后才限幅。
-     * 直接在 int16_t 上累加会在中途溢出并可能产生方向相反的电流 ——
-     * 这类驱动里最危险的 bug（电机突然反转）。
+     * 控制槽按电机 ID 排列：下标 0~3 对应 0x1FF，下标 4~7 对应
+     * 0x2FF。用 8 个 int32_t 临时量，避免把 5~8 号槽写出数组边界。
      */
-    int32_t current[4] = {0, 0, 0, 0};
+    int32_t current[Dji6020Cfg::MOTOR_ID_MAX] = {0};
+    bool group1Enabled = false;
+    bool group2Enabled = false;
 
     for (uint32_t i = 0; i < Dji6020Cfg::MOTOR_ID_MAX; ++i)
     {
         if (ctrlSlot_[i].enabled)
         {
-            current[i] += ctrlSlot_[i].currentRaw;
+            current[i] = ctrlSlot_[i].currentRaw;
+
+            if (i < 4U)
+            {
+                group1Enabled = true;
+            }
+            else
+            {
+                group2Enabled = true;
+            }
         }
     }
 
     /* --- 限幅到协议量程 ±25000 --- */
-    for (uint32_t i = 0; i < 4; ++i)
+    for (uint32_t i = 0; i < Dji6020Cfg::MOTOR_ID_MAX; ++i)
     {
         if (current[i] > Dji6020Cfg::RAW_MAX)
         {
@@ -73,26 +83,42 @@ void Dji6020Bus::Control(void)
         }
     }
 
-    /* --- 打包：4 个 int16 大端序 ---
-     * 协议规定高字节在前，而 STM32 是小端内存布局，
-     * 必须手动拆字节，不能直接 memcpy 结构体。
+    /* --- 打包并发送：每帧 4 个 int16，大端序 ---
+     * 只有对应组存在已初始化电机时才发送该组，避免无意义的报文。
      */
-    uint8_t data[8];
-    for (uint32_t i = 0; i < 4; ++i)
+    uint8_t data[8] = {0};
+
+    if (group1Enabled)
     {
-        data[i * 2]     = static_cast<uint8_t>((current[i] >> 8) & 0xFF);
-        data[i * 2 + 1] = static_cast<uint8_t>(current[i] & 0xFF);
+        for (uint32_t i = 0; i < 4U; ++i)
+        {
+            data[i * 2U]     = static_cast<uint8_t>((current[i] >> 8) & 0xFF);
+            data[i * 2U + 1] = static_cast<uint8_t>(current[i] & 0xFF);
+        }
+
+        BSP_CAN::FDCAN3_TxFrame.Header.Identifier = Dji6020Cfg::CTRL_ID_GROUP1;
+        for (uint32_t i = 0; i < 8U; ++i)
+        {
+            BSP_CAN::FDCAN3_TxFrame.Data[i] = data[i];
+        }
+        BSP_CAN::AddMessageToTxFifoQ(&BSP_CAN::FDCAN3_TxFrame);
     }
 
-    /* --- 填 ID 并发送（发送帧对象由 bsp_can 持有） --- */
-    BSP_CAN::FDCAN3_TxFrame.Header.Identifier = Dji6020Cfg::CTRL_ID_GROUP1;
-
-    for (uint32_t i = 0; i < 8; ++i)
+    if (group2Enabled)
     {
-        BSP_CAN::FDCAN3_TxFrame.Data[i] = data[i];
-    }
+        for (uint32_t i = 0; i < 4U; ++i)
+        {
+            data[i * 2U]     = static_cast<uint8_t>((current[i + 4U] >> 8) & 0xFF);
+            data[i * 2U + 1] = static_cast<uint8_t>(current[i + 4U] & 0xFF);
+        }
 
-    BSP_CAN::AddMessageToTxFifoQ(&BSP_CAN::FDCAN3_TxFrame);
+        BSP_CAN::FDCAN3_TxFrame.Header.Identifier = Dji6020Cfg::CTRL_ID_GROUP2;
+        for (uint32_t i = 0; i < 8U; ++i)
+        {
+            BSP_CAN::FDCAN3_TxFrame.Data[i] = data[i];
+        }
+        BSP_CAN::AddMessageToTxFifoQ(&BSP_CAN::FDCAN3_TxFrame);
+    }
 
     /* 顺带更新在线状态，调用方不必额外维护 */
     UpdateOnlineState();
@@ -110,13 +136,18 @@ void Dji6020Bus::Control(void)
 void Dji6020Bus::ParseFeedback(uint32_t identifier, const uint8_t data[8])
 {
     /* 反馈 ID 从 0x205 开始；超出本工程电机数量的 ID 会在下面匹配失败 */
-    if (identifier < Dji6020Cfg::FEEDBACK_ID_BASE)
+    if (data == nullptr || identifier < Dji6020Cfg::FEEDBACK_ID_BASE)
     {
         return;
     }
 
     /* 反馈 ID 反推电机标号：0x205 → 1 号电机 */
     const uint32_t motorId = identifier - Dji6020Cfg::FEEDBACK_ID_BASE + 1;
+
+    if (motorId > Dji6020Cfg::MOTOR_ID_MAX)
+    {
+        return;
+    }
 
     /* 按 motorId_ 匹配查找，不能用 ID 直接算下标 ——
      * 电机对象的下标由调用者按机械位置决定（前轮/左轮/右轮），

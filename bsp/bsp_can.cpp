@@ -107,6 +107,14 @@ void BSP_CAN::RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
                            &FDCAN_RxFIFO1Frame.Header,
                            FDCAN_RxFIFO1Frame.Data) != HAL_OK) return;
 
+    /* VESC 状态帧必须是 29 位标准的数据帧，负载固定 8 字节。 */
+    if (FDCAN_RxFIFO1Frame.Header.IdType != FDCAN_EXTENDED_ID ||
+        FDCAN_RxFIFO1Frame.Header.RxFrameType != FDCAN_DATA_FRAME ||
+        FDCAN_RxFIFO1Frame.Header.DataLength != FDCAN_DLC_BYTES_8)
+    {
+        return;
+    }
+
     /* VESC 总线：只把 ID 和数据交给协议层，硬件细节不往上透传 */
     if (hfdcan == &hfdcan1) {
         VescMotor::ParseCanFeedback(FDCAN_RxFIFO1Frame.Header.Identifier,
@@ -130,6 +138,14 @@ void BSP_CAN::RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
                            FDCAN_RX_FIFO0,
                            &FDCAN_RxFIFO0Frame.Header,
                            FDCAN_RxFIFO0Frame.Data) != HAL_OK) return;
+
+    /* DJI 6020 反馈必须是 11 位标准的数据帧，负载固定 8 字节。 */
+    if (FDCAN_RxFIFO0Frame.Header.IdType != FDCAN_STANDARD_ID ||
+        FDCAN_RxFIFO0Frame.Header.RxFrameType != FDCAN_DATA_FRAME ||
+        FDCAN_RxFIFO0Frame.Header.DataLength != FDCAN_DLC_BYTES_8)
+    {
+        return;
+    }
 
     /* 6020 总线：只把 ID 和数据交给协议层，硬件细节不往上透传 */
     if (hfdcan == &hfdcan3) {

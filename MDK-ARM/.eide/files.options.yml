@@ -19,6 +19,10 @@ options:
         files: {}
         virtualPathFiles:
             <virtual_root>/Application/User/Core/freertos.c: ""
+            <virtual_root>/Application/User/Core/dma.c: ""
+            <virtual_root>/Application/User/Core/usart.c: ""
+            <virtual_root>/Drivers/STM32H7xx_HAL_Driver/stm32h7xx_hal_uart.c: ""
+            <virtual_root>/Drivers/STM32H7xx_HAL_Driver/stm32h7xx_hal_uart_ex.c: ""
             <virtual_root>/Middlewares/FreeRTOS/mpu_wrappers_v2.c: ""
             <virtual_root>/Middlewares/FreeRTOS/croutine.c: ""
             <virtual_root>/Middlewares/FreeRTOS/event_groups.c: ""
