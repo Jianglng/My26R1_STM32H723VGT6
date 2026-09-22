@@ -2,37 +2,7 @@
 
 #include <stdint.h>
 
-/**
- * @brief 底盘 PID 参数，数值来自 Chassis2026_R1_H723。
- *
- * 参考工程底盘环把 dt 当成 1（约 1 ms 一个控制周期）。
- * 本工程用 DWT 测真实间隔，再换成毫秒，因此 Kp/Ki/Kd 可以原样使用。
- *
- * 6020 是串级：
- *   角度环输出 -> 速度环目标
- *   速度环输出 -> 电流原始值 ±25000，对应 ±20 A
- *
- * 轮向 VESC 在参考工程里走电调自身转速环，主控不另做 PID。
- */
-namespace PidCfg
-{
-    const uint32_t STEER_COUNT = 3U;           ///< 三个舵向 6020。
-    const float ENCODER_RANGE = 8192.0f;       ///< 6020 单圈编码器。
-
-    const float STEER_ANGLE_KP = 4.0f;         ///< 舵向角度环 Kp。
-    const float STEER_ANGLE_KI = 0.0f;         ///< 舵向角度环 Ki，参考工程为 0。
-    const float STEER_ANGLE_KD = 0.8f;         ///< 舵向角度环 Kd。
-    const float STEER_ANGLE_I_LIMIT = 3000.0f; ///< 舵向角度环积分限幅。
-    const float STEER_ANGLE_MAX = 8192.0f;     ///< 舵向角度环输出限幅，作为速度环目标。
-    const float STEER_ANGLE_DEADBAND = 0.0f;   ///< 舵向角度环死区。
-
-    const float STEER_SPEED_KP = 4.0f;         ///< 舵向速度环 Kp。
-    const float STEER_SPEED_KI = 0.005f;       ///< 舵向速度环 Ki。
-    const float STEER_SPEED_KD = 0.2f;         ///< 舵向速度环 Kd。
-    const float STEER_SPEED_I_LIMIT = 4000.0f; ///< 舵向速度环积分限幅。
-    const float STEER_SPEED_MAX = 25000.0f;    ///< 舵向速度环输出限幅，6020 电流原始值。
-    const float STEER_SPEED_DEADBAND = 0.0f;   ///< 舵向速度环死区。
-}
+#include "robot_config.h"
 
 /**
  * @brief PID 可选功能，可按位或。
@@ -45,7 +15,7 @@ enum PidImprove
 };
 
 /**
- * @brief 一组可直接交给 Pid::init() 的参数。
+ * @brief 一组可直接交给 Pid::Init() 的参数。
  */
 struct PidParam
 {
@@ -60,25 +30,28 @@ struct PidParam
 
 namespace PidCfg
 {
+    const uint32_t STEER_COUNT = RobotConfig::WHEEL_COUNT;
+    const float ENCODER_RANGE = RobotConfig::DJI_ENCODER_MAX;
+
     const PidParam STEER_ANGLE =
     {
-        STEER_ANGLE_MAX,
-        STEER_ANGLE_I_LIMIT,
-        STEER_ANGLE_DEADBAND,
-        STEER_ANGLE_KP,
-        STEER_ANGLE_KI,
-        STEER_ANGLE_KD,
+        RobotConfig::STEER_ANGLE_MAX,
+        RobotConfig::STEER_ANGLE_I_LIMIT,
+        RobotConfig::STEER_ANGLE_DEADBAND,
+        RobotConfig::STEER_ANGLE_KP,
+        RobotConfig::STEER_ANGLE_KI,
+        RobotConfig::STEER_ANGLE_KD,
         PID_IMPROVE_INTEGRAL_LIMIT
     };
 
     const PidParam STEER_SPEED =
     {
-        STEER_SPEED_MAX,
-        STEER_SPEED_I_LIMIT,
-        STEER_SPEED_DEADBAND,
-        STEER_SPEED_KP,
-        STEER_SPEED_KI,
-        STEER_SPEED_KD,
+        RobotConfig::STEER_SPEED_MAX,
+        RobotConfig::STEER_SPEED_I_LIMIT,
+        RobotConfig::STEER_SPEED_DEADBAND,
+        RobotConfig::STEER_SPEED_KP,
+        RobotConfig::STEER_SPEED_KI,
+        RobotConfig::STEER_SPEED_KD,
         PID_IMPROVE_INTEGRAL_LIMIT
     };
 }
@@ -129,24 +102,13 @@ public:
     Pid();
 
     /**
-     * @brief 按底盘参数表初始化。
+     * @brief 写入参数并清零积分、误差历史。
      * @param param 例如 PidCfg::STEER_ANGLE、PidCfg::STEER_SPEED。
      */
-    void init(const PidParam &param);
-
-    /**
-     * @brief 写入参数，并清零积分和误差历史。
-     */
-    void init(float maxOut,
-              float integralLimit,
-              float deadband,
-              float kp,
-              float ki,
-              float kd,
-              uint8_t improve);
+    void Init(const PidParam &param);
 
     /** @brief 清零积分和输出。遥控器离线时应调用。 */
-    void reset();
+    void Reset();
 
     /**
      * @brief 普通 PID，给速度环用。
@@ -178,5 +140,5 @@ extern Pid g_steerAnglePid[PidCfg::STEER_COUNT];
 /** @brief 三个舵向速度环，下标与角度环一致。 */
 extern Pid g_steerSpeedPid[PidCfg::STEER_COUNT];
 
-/** @brief 按参考底盘参数初始化全部舵向 PID。须在 DWT_.init() 之后调用。 */
-void initChassisPid();
+/** @brief 按参考底盘参数初始化全部舵向 PID。须在 DWT_.Init() 之后调用。 */
+void InitChassisPid();

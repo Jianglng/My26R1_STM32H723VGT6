@@ -1,5 +1,5 @@
-my26r1_stm32h723vgt6/vesc_motor.o: ..\vesc_can\vesc_motor.cpp \
-  ..\vesc_can\vesc_motor.h ..\Core\Inc\main.h \
+my26r1_stm32h723vgt6/chaohe_imu.o: ..\chaohe_imu\chaohe_imu.cpp \
+  ..\chaohe_imu\chaohe_imu.h ..\Core\Inc\main.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal.h \
   ..\Core\Inc\stm32h7xx_hal_conf.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_rcc.h \
@@ -29,5 +29,5 @@ my26r1_stm32h723vgt6/vesc_motor.o: ..\vesc_can\vesc_motor.cpp \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_tim_ex.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_uart.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_uart_ex.h \
-  ..\robot_config\robot_config.h ..\bsp\bsp_can.h ..\Core\Inc\fdcan.h \
-  ..\Core\Inc\gpio.h
+  ..\chaohe_imu\hipnuc_dec.h ..\chaohe_imu\hipnuc_sample.h \
+  ..\Core\Inc\dma.h ..\remote\remote_input.h

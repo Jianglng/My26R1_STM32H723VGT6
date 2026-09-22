@@ -21,36 +21,19 @@ Pid::Pid()
     state.dt = kDtDefaultMs;
 }
 
-void Pid::init(const PidParam &param)
+void Pid::Init(const PidParam &param)
 {
-    init(param.maxOut,
-         param.integralLimit,
-         param.deadband,
-         param.kp,
-         param.ki,
-         param.kd,
-         param.improve);
+    state.maxOut = param.maxOut;
+    state.integralLimit = param.integralLimit;
+    state.deadband = param.deadband;
+    state.kp = param.kp;
+    state.ki = param.ki;
+    state.kd = param.kd;
+    state.improve = param.improve;
+    Reset();
 }
 
-void Pid::init(float maxOut,
-               float integralLimit,
-               float deadband,
-               float kp,
-               float ki,
-               float kd,
-               uint8_t improve)
-{
-    state.maxOut = maxOut;
-    state.integralLimit = integralLimit;
-    state.deadband = deadband;
-    state.kp = kp;
-    state.ki = ki;
-    state.kd = kd;
-    state.improve = improve;
-    reset();
-}
-
-void Pid::reset()
+void Pid::Reset()
 {
     state.measure = 0.0f;
     state.err = 0.0f;
@@ -190,11 +173,11 @@ void Pid::applyOutputLimit()
     }
 }
 
-void initChassisPid()
+void InitChassisPid()
 {
     for (uint32_t i = 0; i < PidCfg::STEER_COUNT; ++i)
     {
-        g_steerAnglePid[i].init(PidCfg::STEER_ANGLE);
-        g_steerSpeedPid[i].init(PidCfg::STEER_SPEED);
+        g_steerAnglePid[i].Init(PidCfg::STEER_ANGLE);
+        g_steerSpeedPid[i].Init(PidCfg::STEER_SPEED);
     }
 }

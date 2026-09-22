@@ -41,12 +41,6 @@
  * ============================================================ */
 namespace Dji6020Cfg
 {
-    /* 说明：这里用 const 而不是 constexpr。
-     * 命名空间作用域的 const 整型/浮点常量同样是常量表达式（可作数组维度），
-     * 语义与 constexpr 等价，但不要求编译器开启 C++11。
-     * EIDE 的 C++ 标准是"按文件"配置的（.eide/files.options.yml），
-     * 新增 .cpp 文件容易漏配 --cpp11，用 const 可以避免被这种配置问题卡住。 */
-
     /* --- CAN 标识符 --- */
     const uint32_t CTRL_ID_GROUP1   = 0x1FF;   ///< 控制 1~4 号电机
     const uint32_t CTRL_ID_GROUP2   = 0x2FF;   ///< 控制 5~8 号电机
@@ -142,7 +136,7 @@ private:
     struct ControlSlot
     {
         int16_t currentRaw;   ///< 原始电流值 ±25000
-        bool    enabled;      ///< 是否参与控制（未 init 的电机不写入）
+        bool    enabled;      ///< 是否参与控制（未 Init 的电机不写入）
     };
 
     static ControlSlot ctrlSlot_[Dji6020Cfg::MOTOR_ID_MAX];
@@ -157,9 +151,9 @@ private:
  *
  *  【使用方法】
  *  ① 绑定 ID（数组下标按机械位置排，与 CAN ID 顺序无关）：
- *       Dji6020Motors[0].init(1);   // 前轮 → 反馈 0x205
- *       Dji6020Motors[1].init(4);   // 左轮 → 反馈 0x208
- *       Dji6020Motors[2].init(3);   // 右轮 → 反馈 0x207
+ *       Dji6020Motors[0].Init(1);   // 前轮 → 反馈 0x205
+ *       Dji6020Motors[1].Init(4);   // 左轮 → 反馈 0x208
+ *       Dji6020Motors[2].Init(3);   // 右轮 → 反馈 0x207
  *  ② 下发电流：
  *       Dji6020Motors[0].setCurrent(3.0f);   // 3 A
  *  ③ 读取反馈：
@@ -179,7 +173,7 @@ public:
      *  ID 超范围会被拒绝并保持未初始化 —— 配错 ID 会导致电机
      *  完全不响应且没有任何报错，在初始化阶段拒绝能让问题早暴露。
      * -------------------------------------------------------- */
-    void init(uint32_t motorId);
+    void Init(uint32_t motorId);
 
     /* --------------------------------------------------------
      *  设置目标转矩电流 (A)，正=正转、负=反转
@@ -215,7 +209,7 @@ private:
 
 /* ============================================================
  *  全局电机数组（下标 0~2 对应三路 6020）
- *  使用前必须各自调用 init() 绑定 CAN ID。
+ *  使用前必须各自调用 Init() 绑定 CAN ID。
  *
  *  下标由机械位置决定，与 CAN ID 顺序无关：
  *      [0] 前轮 → 1 号（反馈 0x205）

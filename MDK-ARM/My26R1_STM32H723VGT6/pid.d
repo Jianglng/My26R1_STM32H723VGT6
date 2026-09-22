@@ -1,5 +1,6 @@
-my26r1_stm32h723vgt6/pid.o: ..\pid\pid.cpp ..\pid\pid.h ..\bsp\bsp_dwt.h \
-  ..\Core\Inc\main.h ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal.h \
+my26r1_stm32h723vgt6/pid.o: ..\pid\pid.cpp ..\pid\pid.h \
+  ..\robot_config\robot_config.h ..\bsp\bsp_dwt.h ..\Core\Inc\main.h \
+  ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal.h \
   ..\Core\Inc\stm32h7xx_hal_conf.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_rcc.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_def.h \

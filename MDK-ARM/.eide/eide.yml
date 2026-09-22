@@ -4,9 +4,8 @@ type: ARM
 deviceName: STM32H723VGTx
 packDir: .pack/Keil/STM32H7xx_DFP.4.1.3
 srcDirs:
-  - ../remote
-  - ../kinematics
-  - ../pid
+  - ../robot_config
+  - ../chaohe_imu
 virtualFolder:
   name: <virtual_root>
   files: []
@@ -118,6 +117,10 @@ virtualFolder:
         - path: ../pid/pid.cpp
         - path: ../pid/pid.h
       folders: []
+    - name: robot_config
+      files:
+        - path: ../robot_config/robot_config.h
+      folders: []
     - name: ::CMSIS
       files: []
       folders: []
@@ -147,11 +150,12 @@ targets:
         - ../Task
         - ../dji_can
         - ../remote
+        - ../kinematics
+        - ../pid
+        - ../robot_config
         - ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F
         - .cmsis/include
         - RTE/_My26R1_STM32H723VGT6
-        - ../kinematics
-        - ../pid
       libList: []
     excludeList: []
     settings:

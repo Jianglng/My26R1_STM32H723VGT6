@@ -1,37 +1,93 @@
 #include "Chassis_Task.h"
 
+#include <math.h>
+
 #include "cmsis_os.h"
 #include "bsp_can.h"
 #include "bsp_dwt.h"
 #include "vesc_motor.h"
 #include "dji_6020.h"
 #include "remote_input.h"
+//#include "chaohe_imu.h"
 #include "chassis_kinematics.h"
 #include "pid.h"
+#include "robot_config.h"
 #include "usart.h"
 
 namespace
 {
+    float applyDeadband(float value, float deadband)
+    {
+        if (fabsf(value) < deadband)
+        {
+            return 0.0f;
+        }
+        return value;
+    }
+
+    float clampAbs(float value, float limit)
+    {
+        if (value > limit)
+        {
+            return limit;
+        }
+        if (value < -limit)
+        {
+            return -limit;
+        }
+        return value;
+    }
+
+    ChassisBodyVelocity mapRemote(const RemoteState &remote)
+    {
+        ChassisBodyVelocity vel = {};
+        if (!remote.online)
+        {
+            return vel;
+        }
+
+        const float scaleX = RobotConfig::MAX_VX / RobotConfig::REMOTE_CH_MAX;
+        const float scaleY = RobotConfig::MAX_VY / RobotConfig::REMOTE_CH_MAX;
+        const float scaleW = RobotConfig::MAX_WZ / RobotConfig::REMOTE_CH_MAX;
+
+        const float stickForward = applyDeadband(static_cast<float>(remote.leftY),
+                                                 RobotConfig::REMOTE_DEADBAND);
+        const float stickRight = applyDeadband(static_cast<float>(remote.leftX),
+                                               RobotConfig::REMOTE_DEADBAND);
+        const float stickYaw = applyDeadband(static_cast<float>(remote.rightX),
+                                             RobotConfig::REMOTE_DEADBAND);
+
+        vel.vx = clampAbs(stickForward * scaleX * RobotConfig::REMOTE_VX_SIGN,
+                          RobotConfig::MAX_VX);
+        vel.vy = clampAbs(stickRight * scaleY * RobotConfig::REMOTE_VY_SIGN,
+                          RobotConfig::MAX_VY);
+        vel.wz = clampAbs(stickYaw * scaleW * RobotConfig::REMOTE_WZ_SIGN,
+                          RobotConfig::MAX_WZ);
+        return vel;
+    }
+
     void stopMotors()
     {
         for (uint32_t i = 0; i < ChassisKinematicsCfg::WHEEL_COUNT; ++i)
         {
-            g_steerAnglePid[i].reset();
-            g_steerSpeedPid[i].reset();
+            g_steerAnglePid[i].Reset();
+            g_steerSpeedPid[i].Reset();
             Dji6020Motors[i].setCurrent(0.0f);
             VescMotors[i].setRpm(0);
         }
     }
 
-    void runSteerPid(const ChassisWheelCommand &command)
+    /** @brief 6020 串级：角度环出速度目标，速度环出电流。掉线则清积分并电流置 0。 */
+    void runSteerPid(const ChassisWheelCommand &command,
+                     const Dji6020RxData steerFeedback[ChassisKinematicsCfg::WHEEL_COUNT])
     {
         for (uint32_t i = 0; i < ChassisKinematicsCfg::WHEEL_COUNT; ++i)
         {
-            const Dji6020RxData &rx = Dji6020Motors[i].getRxData();
+            const Dji6020RxData &rx = steerFeedback[i];
             if (!rx.online)
             {
-                g_steerAnglePid[i].reset();
-                g_steerSpeedPid[i].reset();
+                g_steerAnglePid[i].Reset();
+                g_steerSpeedPid[i].Reset();
                 Dji6020Motors[i].setCurrent(0.0f);
                 continue;
             }
@@ -49,11 +105,13 @@ namespace
         }
     }
 
-    void runWheelRpm(const ChassisWheelCommand &command)
+    /** @brief 把逆解轮速发给 VESC。对应舵向 6020 掉线时该路转速置 0。 */
+    void runWheelRpm(const ChassisWheelCommand &command,
+                     const Dji6020RxData steerFeedback[ChassisKinematicsCfg::WHEEL_COUNT])
     {
         for (uint32_t i = 0; i < ChassisKinematicsCfg::WHEEL_COUNT; ++i)
         {
-            if (!Dji6020Motors[i].getRxData().online)
+            if (!steerFeedback[i].online)
             {
                 VescMotors[i].setRpm(0);
                 continue;
@@ -69,36 +127,35 @@ extern "C" void StartChassisTask(void *argument)
     (void)argument;
 
     /* CPU 480 MHz，CYCCNT 按核时钟计数，必须在时钟配置之后打开。 */
-    DWT_.init(SystemCoreClock / 1000000U);
-    initChassisPid();
+    DWT_.Init(SystemCoreClock / 1000000U);
+    InitChassisPid();
 
-    /* VESC (FDCAN1)：扩展帧，每个电机一帧独立下发。 */
-    VescMotors[0].init(&hfdcan1, 90);
-    VescMotors[1].init(&hfdcan1, 69);
-    VescMotors[2].init(&hfdcan1, 97);
-
-    /* 6020 (FDCAN3)：标准帧，三个电机共用 0x1FF。
-     * 下标按机械位置：[0] 前轮 ID1，[1] 左轮 ID4，[2] 右轮 ID3。
-     */
-    Dji6020Motors[0].init(1);
-    Dji6020Motors[1].init(4);
-    Dji6020Motors[2].init(3);
+    /* VESC 在 FDCAN1，6020 在 FDCAN3。ID 见 robot_config.h。 */
+    for (uint32_t i = 0; i < RobotConfig::WHEEL_COUNT; ++i)
+    {
+        VescMotors[i].Init(&hfdcan1, RobotConfig::VESC_NODE_ID[i]);
+        Dji6020Motors[i].Init(RobotConfig::DJI_MOTOR_ID[i]);
+    }
 
     BSP_CAN::Init();
-    g_remoteInput.init(&huart5);
+    g_remoteInput.Init(&huart5);
+    //g_chaoheImu.Init(&huart1);
     stopMotors();
 
     for (;;)
     {
         g_remoteInput.update();
+       // g_chaoheImu.update();
+        /* IMU 已在 USART1 接收，当前不参与底盘控制。需要时读 g_chaoheImu.state()。 */
         const RemoteState &remoteState = g_remoteInput.state();
 
-        int16_t steerEncoder[ChassisKinematicsCfg::WHEEL_COUNT] =
+        Dji6020RxData steerFeedback[ChassisKinematicsCfg::WHEEL_COUNT];
+        int16_t steerEncoder[ChassisKinematicsCfg::WHEEL_COUNT];
+        for (uint32_t i = 0; i < ChassisKinematicsCfg::WHEEL_COUNT; ++i)
         {
-            Dji6020Motors[0].getRxData().encoder,
-            Dji6020Motors[1].getRxData().encoder,
-            Dji6020Motors[2].getRxData().encoder
-        };
+            steerFeedback[i] = Dji6020Motors[i].getRxData();
+            steerEncoder[i] = steerFeedback[i].encoder;
+        }
 
         if (!remoteState.online)
         {
@@ -108,13 +165,13 @@ extern "C" void StartChassisTask(void *argument)
             continue;
         }
 
-        const ChassisBodyVelocity bodyVel = g_chassisKinematics.mapRemote(remoteState);
+        const ChassisBodyVelocity bodyVel = mapRemote(remoteState);
         const ChassisWheelCommand command =
             g_chassisKinematics.inverse(bodyVel, steerEncoder);
 
-        runSteerPid(command);
+        runSteerPid(command, steerFeedback);
         Dji6020Bus::Control();
-        runWheelRpm(command);
+        runWheelRpm(command, steerFeedback);
 
         osDelay(1);
     }

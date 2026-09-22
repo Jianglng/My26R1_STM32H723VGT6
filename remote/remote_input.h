@@ -37,7 +37,7 @@ public:
      *  @param uart 串口句柄，当前工程传入 &huart5。
      *  @return HAL 启动结果；空指针或未配置 DMA 时返回 HAL_ERROR。
      */
-    HAL_StatusTypeDef init(UART_HandleTypeDef *uart);
+    HAL_StatusTypeDef Init(UART_HandleTypeDef *uart);
 
     /** @brief 在底盘任务中周期调用，超过 300 ms 无有效帧则标记离线。 */
     void update();

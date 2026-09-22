@@ -1,5 +1,5 @@
 /**
- *  DJI 6020 协议层实现（对应 dji_6020.h）
+ *  DJI 6020 协议层实现
  *
  *  职责边界：
  *    本文件 —— 电流标定、控制帧打包、反馈帧解析、累计角度
@@ -32,7 +32,7 @@ Dji6020Motor Dji6020Motors[Dji6020Cfg::MOTOR_MAX];
  *
  *         注意"写 0"和"不写入"在电调看来是两回事：停止下发会让电调
  *         进入失联保护，而写 0 是明确的零力矩指令。所以只要电机
- *         init() 过，就应该一直留在控制帧里。
+ *         Init() 过，就应该一直留在控制帧里。
  */
 void Dji6020Bus::Control(void)
 {
@@ -243,7 +243,7 @@ Dji6020Motor::Dji6020Motor()
  * @brief  绑定电机 ID 并注册到控制帧
  * @param  motorId  1~8，必须与电调实际配置一致
  */
-void Dji6020Motor::init(uint32_t motorId)
+void Dji6020Motor::Init(uint32_t motorId)
 {
     /* 范围检查：ID 配错会导致电机完全不响应且无任何报错，
      * 所以在初始化阶段直接拒绝，让问题早暴露。 */

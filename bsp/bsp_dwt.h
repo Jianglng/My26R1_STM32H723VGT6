@@ -17,7 +17,7 @@ struct DWT_Time_t
  * @brief 用 Cortex-M7 的 DWT 周期计数器做微秒级计时。
  *
  * CYCCNT 按 CPU 主频计数，本工程为 480 MHz。
- * 必须在 SystemClock_Config() 之后调用 init()，PID 才能得到正确的 dt。
+ * 必须在 SystemClock_Config() 之后调用 Init()，PID 才能得到正确的 dt。
  * delay_s() 是死等，不要在 FreeRTOS 任务里调用。
  */
 class DWT_Timer
@@ -29,7 +29,7 @@ public:
      * @brief 打开 CYCCNT，并记录 CPU 主频。
      * @param cpu_freq_mhz CPU 频率，单位 MHz。本工程传入 SystemCoreClock / 1000000。
      */
-    void init(uint32_t cpu_freq_mhz);
+    void Init(uint32_t cpu_freq_mhz);
 
     /**
      * @brief 距上次调用该计数器快照的时间差。

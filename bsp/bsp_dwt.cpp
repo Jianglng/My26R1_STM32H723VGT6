@@ -2,7 +2,7 @@
 
 DWT_Timer DWT_;
 
-void DWT_Timer::init(uint32_t cpu_freq_mhz)
+void DWT_Timer::Init(uint32_t cpu_freq_mhz)
 {
     if (cpu_freq_mhz == 0U)
     {

@@ -32,6 +32,6 @@ my26r1_stm32h723vgt6/chassis_task.o: ..\Task\Chassis_Task.cpp \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_uart.h \
   ..\Drivers\STM32H7xx_HAL_Driver\Inc\stm32h7xx_hal_uart_ex.h \
   ..\Core\Inc\fdcan.h ..\Core\Inc\main.h ..\bsp\bsp_dwt.h \
-  ..\vesc_can\vesc_motor.h ..\dji_can\dji_6020.h \
-  ..\remote\remote_input.h ..\kinematics\chassis_kinematics.h \
-  ..\pid\pid.h ..\Core\Inc\usart.h
+  ..\vesc_can\vesc_motor.h ..\robot_config\robot_config.h \
+  ..\dji_can\dji_6020.h ..\remote\remote_input.h \
+  ..\kinematics\chassis_kinematics.h ..\pid\pid.h ..\Core\Inc\usart.h

@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>USE_PWR_LDO_SUPPLY,USE_HAL_DRIVER,STM32H723xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Drivers/CMSIS/RTOS2/Include;../bsp;../vesc_can;../Task;../dji_can;../remote;../kinematics;../pid;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Drivers/CMSIS/RTOS2/Include;../bsp;../vesc_can;../Task;../dji_can;../remote;../chaohe_imu;../kinematics;../pid;../robot_config;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1746,6 +1746,41 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>chaohe_imu</GroupName>
+          <Files>
+            <File>
+              <FileName>chaohe_imu.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>..\chaohe_imu\chaohe_imu.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>chaohe_imu.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\chaohe_imu\chaohe_imu.h</FilePath>
+            </File>
+            <File>
+              <FileName>hipnuc_dec.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\chaohe_imu\hipnuc_dec.c</FilePath>
+            </File>
+            <File>
+              <FileName>hipnuc_dec.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\chaohe_imu\hipnuc_dec.h</FilePath>
+            </File>
+            <File>
+              <FileName>hipnuc_sample.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\chaohe_imu\hipnuc_sample.c</FilePath>
+            </File>
+            <File>
+              <FileName>hipnuc_sample.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\chaohe_imu\hipnuc_sample.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>kinematics</GroupName>
           <Files>
             <File>
@@ -1772,6 +1807,16 @@
               <FileName>pid.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\pid\pid.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>robot_config</GroupName>
+          <Files>
+            <File>
+              <FileName>robot_config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\robot_config\robot_config.h</FilePath>
             </File>
           </Files>
         </Group>

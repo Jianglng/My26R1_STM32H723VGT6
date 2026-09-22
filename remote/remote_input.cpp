@@ -4,7 +4,7 @@
 RemoteInput g_remoteInput;
 
 /** @brief 绑定串口并启动 DMA 空闲接收。 */
-HAL_StatusTypeDef RemoteInput::init(UART_HandleTypeDef *uart)
+HAL_StatusTypeDef RemoteInput::Init(UART_HandleTypeDef *uart)
 {
     if (uart == nullptr || uart->hdmarx == nullptr)
     {
@@ -104,14 +104,5 @@ void RemoteInput::decode(const uint8_t *sbus)
     state_.online = true;
 }
 
-/** @brief HAL 空闲接收完成回调，转交给遥控器对象。 */
-extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *uart, uint16_t size)
-{
-    g_remoteInput.onRxEvent(uart, size);
-}
-
-/** @brief HAL 串口错误回调，转交给遥控器对象。 */
-extern "C" void HAL_UART_ErrorCallback(UART_HandleTypeDef *uart)
-{
-    g_remoteInput.onError(uart);
-}
+/* HAL_UARTEx_RxEventCallback / HAL_UART_ErrorCallback 只在 chaohe_imu.cpp 里实现一次，
+ * 那里会按串口分发给遥控器和 IMU。这里不要再定义，否则链接会报 multiply defined。 */
