@@ -1,183 +1,155 @@
 #include "pid.h"
 
+#include "math_utils.h"
+
 #include <math.h>
-#include <string.h>
 
 #include "bsp_dwt.h"
 
 namespace
 {
-    const float kDtMinMs = 0.2f;     // 小于 0.2 ms 时微分会过大。
-    const float kDtMaxMs = 5.0f;     // 大于 5 ms 视为任务被卡住。
-    const float kDtDefaultMs = 1.0f; // 与参考工程底盘环使用的 dt=1 一致。
+    constexpr float DT_MIN_MS = 0.2f;     // 小于 0.2 ms 时微分会过大。
+    constexpr float DT_MAX_MS = 5.0f;     // 大于 5 ms 视为任务被卡住。
+    constexpr float DT_DEFAULT_MS = 1.0f; // 与参考工程底盘环使用的 dt=1 一致。
 }
 
-Pid g_steerAnglePid[PidCfg::STEER_COUNT];
-Pid g_steerSpeedPid[PidCfg::STEER_COUNT];
 
 Pid::Pid()
+    : timer_(nullptr)
 {
-    memset(&state, 0, sizeof(state));
-    state.dt = kDtDefaultMs;
+    state_ = {};
+    state_.dt = DT_DEFAULT_MS;
 }
 
-void Pid::Init(const PidParam &param)
+void Pid::Init(const PidParam &param, DwtTimer &timer)
 {
-    state.maxOut = param.maxOut;
-    state.integralLimit = param.integralLimit;
-    state.deadband = param.deadband;
-    state.kp = param.kp;
-    state.ki = param.ki;
-    state.kd = param.kd;
-    state.improve = param.improve;
+    timer_ = &timer;
+    state_.maxOut = param.maxOut;
+    state_.integralLimit = param.integralLimit;
+    state_.deadband = param.deadband;
+    state_.kp = param.kp;
+    state_.ki = param.ki;
+    state_.kd = param.kd;
+    state_.improve = param.improve;
     Reset();
 }
 
 void Pid::Reset()
 {
-    state.measure = 0.0f;
-    state.err = 0.0f;
-    state.lastErr = 0.0f;
-    state.pOut = 0.0f;
-    state.iOut = 0.0f;
-    state.dOut = 0.0f;
-    state.iTerm = 0.0f;
-    state.output = 0.0f;
-    state.dt = kDtDefaultMs;
-    state.dwtCnt = DWT->CYCCNT;
+    state_.measure = 0.0f;
+    state_.err = 0.0f;
+    state_.lastErr = 0.0f;
+    state_.pOut = 0.0f;
+    state_.iOut = 0.0f;
+    state_.dOut = 0.0f;
+    state_.iTerm = 0.0f;
+    state_.output = 0.0f;
+    state_.dt = DT_DEFAULT_MS;
+    state_.dwtCnt = DWT->CYCCNT;
 }
 
-float Pid::wrapEncoderError(float err, float range) const
+float Pid::Calculate(float measure, float ref)
 {
-    if (range <= 0.0f)
-    {
-        return err;
-    }
+    state_.measure = measure;
+    state_.ref = ref;
 
-    err = fmodf(err, range);
-    const float half = 0.5f * range;
-    if (err > half)
-    {
-        err -= range;
-    }
-    else if (err < -half)
-    {
-        err += range;
-    }
-    return err;
-}
-
-float Pid::calculate(float measure, float ref)
-{
-    state.measure = measure;
-    state.ref = ref;
-
-    float err = state.ref - state.measure;
-    if (fabsf(err) < state.deadband)
+    float err = state_.ref - state_.measure;
+    if (fabsf(err) < state_.deadband)
     {
         err = 0.0f;
     }
 
-    return run(err);
+    return Run(err);
 }
 
-float Pid::calculateEncoder(float measure, float ref, float encoderRange)
+float Pid::CalculateEncoder(float measure, float ref, float encoderRange)
 {
-    state.measure = measure;
-    state.ref = ref;
+    state_.measure = measure;
+    state_.ref = ref;
 
-    float err = wrapEncoderError(state.ref - state.measure, encoderRange);
-    if (fabsf(err) < state.deadband)
+    float err = MathUtils::WrapEncoderError(state_.ref - state_.measure, encoderRange);
+    if (fabsf(err) < state_.deadband)
     {
         err = 0.0f;
     }
 
-    return run(err);
+    return Run(err);
 }
 
-float Pid::run(float err)
+float Pid::Run(float err)
 {
-    state.err = err;
+    state_.err = err;
 
     /* DWT 返回秒，乘 1000 得到毫秒，与参考工程底盘 Ki/Kd 对齐。 */
-    state.dt = DWT_.getDeltaT(&state.dwtCnt) * 1000.0f;
-    if (state.dt < kDtMinMs)
+    if (timer_ == nullptr)
     {
-        state.dt = kDtMinMs;
-    }
-    else if (state.dt > kDtMaxMs)
-    {
-        state.dt = kDtMaxMs;
-    }
-
-    state.pOut = state.kp * state.err;
-    state.iTerm = state.ki * state.err * state.dt;
-
-    if (state.dt > 1.0e-6f)
-    {
-        state.dOut = state.kd * (state.err - state.lastErr) / state.dt;
+        state_.dt = DT_DEFAULT_MS;
     }
     else
     {
-        state.dOut = 0.0f;
+        state_.dt = timer_->GetDeltaT(&state_.dwtCnt) * 1000.0f;
+    }
+    if (state_.dt < DT_MIN_MS)
+    {
+        state_.dt = DT_MIN_MS;
+    }
+    else if (state_.dt > DT_MAX_MS)
+    {
+        state_.dt = DT_MAX_MS;
     }
 
-    applyIntegralLimit();
-    state.iOut += state.iTerm;
+    state_.pOut = state_.kp * state_.err;
+    state_.iTerm = state_.ki * state_.err * state_.dt;
 
-    state.output = state.pOut + state.iOut + state.dOut;
-    applyOutputLimit();
+    if (state_.dt > 1.0e-6f)
+    {
+        state_.dOut = state_.kd * (state_.err - state_.lastErr) / state_.dt;
+    }
+    else
+    {
+        state_.dOut = 0.0f;
+    }
 
-    state.lastErr = state.err;
-    return state.output;
+    ApplyIntegralLimit();
+    state_.iOut += state_.iTerm;
+
+    state_.output = state_.pOut + state_.iOut + state_.dOut;
+    ApplyOutputLimit();
+
+    state_.lastErr = state_.err;
+    return state_.output;
 }
 
-void Pid::applyIntegralLimit()
+void Pid::ApplyIntegralLimit()
 {
-    if ((state.improve & PID_IMPROVE_INTEGRAL_LIMIT) == 0)
+    if ((state_.improve & PID_IMPROVE_INTEGRAL_LIMIT) == 0)
     {
         return;
     }
 
-    const float nextIout = state.iOut + state.iTerm;
-    const float unsaturated = state.pOut + state.iOut + state.dOut;
+    const float nextIout = state_.iOut + state_.iTerm;
+    const float unsaturated = state_.pOut + state_.iOut + state_.dOut;
 
     /* 输出已经顶满，且积分还在往同一侧堆，就丢掉本周期积分。 */
-    if (fabsf(unsaturated) > state.maxOut &&
-        (state.err * state.iOut > 0.0f))
+    if (fabsf(unsaturated) > state_.maxOut &&
+        (state_.err * state_.iOut > 0.0f))
     {
-        state.iTerm = 0.0f;
+        state_.iTerm = 0.0f;
     }
 
-    if (nextIout > state.integralLimit)
+    if (nextIout > state_.integralLimit)
     {
-        state.iTerm = 0.0f;
-        state.iOut = state.integralLimit;
+        state_.iTerm = 0.0f;
+        state_.iOut = state_.integralLimit;
     }
-    else if (nextIout < -state.integralLimit)
+    else if (nextIout < -state_.integralLimit)
     {
-        state.iTerm = 0.0f;
-        state.iOut = -state.integralLimit;
+        state_.iTerm = 0.0f;
+        state_.iOut = -state_.integralLimit;
     }
 }
 
-void Pid::applyOutputLimit()
+void Pid::ApplyOutputLimit()
 {
-    if (state.output > state.maxOut)
-    {
-        state.output = state.maxOut;
-    }
-    else if (state.output < -state.maxOut)
-    {
-        state.output = -state.maxOut;
-    }
-}
-
-void InitChassisPid()
-{
-    for (uint32_t i = 0; i < PidCfg::STEER_COUNT; ++i)
-    {
-        g_steerAnglePid[i].Init(PidCfg::STEER_ANGLE);
-        g_steerSpeedPid[i].Init(PidCfg::STEER_SPEED);
-    }
+    state_.output = MathUtils::ClampAbs(state_.output, state_.maxOut);
 }

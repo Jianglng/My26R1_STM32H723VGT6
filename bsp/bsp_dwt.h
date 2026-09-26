@@ -6,7 +6,7 @@
 /**
  * @brief DWT 拆出来的日历时间，仅作调试观察。
  */
-struct DWT_Time_t
+struct DwtTime
 {
     uint32_t s;    ///< 秒。
     uint16_t ms;   ///< 当前秒内的毫秒，0~999。
@@ -18,12 +18,12 @@ struct DWT_Time_t
  *
  * CYCCNT 按 CPU 主频计数，本工程为 480 MHz。
  * 必须在 SystemClock_Config() 之后调用 Init()，PID 才能得到正确的 dt。
- * delay_s() 是死等，不要在 FreeRTOS 任务里调用。
+ * DelayS() 是死等，不要在 FreeRTOS 任务里调用。
  */
-class DWT_Timer
+class DwtTimer
 {
 public:
-    DWT_Time_t sysTime;   ///< 可读的秒/毫秒/微秒，调用 getTimeline_* 后更新。
+    DwtTime sysTime_;   ///< 可读的秒/毫秒/微秒，调用 getTimeline_* 后更新。
 
     /**
      * @brief 打开 CYCCNT，并记录 CPU 主频。
@@ -36,30 +36,29 @@ public:
      * @param cnt_last 调用方自己保存的 CYCCNT，会被更新成当前值。
      * @return 时间差，单位秒。未初始化时返回 0.001。
      */
-    float getDeltaT(uint32_t *cnt_last);
+    float GetDeltaT(uint32_t *cnt_last);
 
-    /** @brief 与 getDeltaT 相同，返回双精度秒。 */
-    double getDeltaT64(uint32_t *cnt_last);
+    /** @brief 与 GetDeltaT 相同，返回双精度秒。 */
+    double GetDeltaT64(uint32_t *cnt_last);
 
     /** @brief 刷新 sysTime。 */
-    void sysTimeUpdate();
+    void SysTimeUpdate();
 
-    float getTimeline_s();
-    float getTimeline_ms();
-    uint64_t getTimeline_us();
+    float GetTimelineS();
+    float GetTimelineMs();
+    uint64_t GetTimelineUs();
 
     /** @brief 忙等延时，单位秒。仅供启动阶段使用，任务里不要调用。 */
-    void delay_s(float delay_s);
+    void DelayS(float seconds);
 
 private:
-    uint32_t cpu_freq_hz_ = 0;
-    uint32_t cpu_freq_hz_ms_ = 0;
-    uint32_t cpu_freq_hz_us_ = 0;
-    uint32_t cyccnt_round_count_ = 0;
-    uint32_t cyccnt_last_ = 0;
+    uint32_t cpuFreqHz_ = 0;
+    uint32_t cpuFreqHzMs_ = 0;
+    uint32_t cpuFreqHzUs_ = 0;
+    uint32_t cyccntRoundCount_ = 0;
+    uint32_t cyccntLast_ = 0;
     uint64_t cyccnt64_ = 0;
 
-    void cntUpdate();
+    void CntUpdate();
 };
 
-extern DWT_Timer DWT_;

@@ -1,43 +1,38 @@
 /* USER CODE BEGIN Header */
-// 负责：
-// 1、把FDCAN 初始化好
-// 2、设置滤波器
-// 3、统一发送 CAN 数据
-// 4、接收中断回调分发
+/** @brief FDCAN 初始化、发送，以及把接收帧交给 VESC / 6020。 */
 /* USER CODE END Header */
 
 #include "bsp_can.h"
 
-#include "vesc_motor.h" // VescMotor::ParseCanFeedback
-#include "dji_6020.h"   // 引入 Dji6020Bus 协议解析接口
+#include "vesc_motor.h"
+#include "dji_6020.h"
 
-/* 接收帧对象 ---------------------------------------------------------------*/
-FDCAN_RxFrame_TypeDef BSP_CAN::FDCAN_RxFIFO1Frame;  // VESC  (FDCAN1, FIFO1)
-FDCAN_RxFrame_TypeDef BSP_CAN::FDCAN_RxFIFO0Frame;  // 6020  (FDCAN3, FIFO0)
+/* 接收帧。VESC 用 FIFO1，6020 用 FIFO0。 */
+FdcanRxFrame BspCan::fdcanRxFifo1Frame_;
+FdcanRxFrame BspCan::fdcanRxFifo0Frame_;
 
-/* 发送帧对象 ---------------------------------------------------------------*/
-/* ARMCC used by this project does not accept C++ designated initializers. */
-FDCAN_TxFrame_TypeDef BSP_CAN::FDCAN1_TxFrame = {};
-FDCAN_TxFrame_TypeDef BSP_CAN::FDCAN3_TxFrame = {};
-
+/* 当前 C++ 方言不用指派初始化，发送帧在 Init() 里逐项赋值。 */
+FdcanTxFrame BspCan::fdcan1TxFrame_ = {};
+FdcanTxFrame BspCan::fdcan3TxFrame_ = {};
 
 
-void BSP_CAN::Init(void)
+
+void BspCan::Init()
 {
     FDCAN_FilterTypeDef FilterConfig; 
 
-    /* Initialize the reusable transmit frame once after CubeMX initialized FDCAN1. */
-    FDCAN1_TxFrame.hcan = &hfdcan1;
-    FDCAN1_TxFrame.Header.Identifier = 0;
-    FDCAN1_TxFrame.Header.IdType = FDCAN_EXTENDED_ID;
-    FDCAN1_TxFrame.Header.TxFrameType = FDCAN_DATA_FRAME;
-    FDCAN1_TxFrame.Header.DataLength = FDCAN_DLC_BYTES_8;
-    FDCAN1_TxFrame.Header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    FDCAN1_TxFrame.Header.BitRateSwitch = FDCAN_BRS_OFF;
-    FDCAN1_TxFrame.Header.FDFormat = FDCAN_CLASSIC_CAN;
-    FDCAN1_TxFrame.Header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-    FDCAN1_TxFrame.Header.MessageMarker = 0;
-    for (uint32_t i = 0; i < 8; ++i) FDCAN1_TxFrame.Data[i] = 0;
+    /* Cube 已经初始化 FDCAN1，这里只填可复用的发送帧。 */
+    fdcan1TxFrame_.hcan = &hfdcan1;
+    fdcan1TxFrame_.header.Identifier = 0;
+    fdcan1TxFrame_.header.IdType = FDCAN_EXTENDED_ID;
+    fdcan1TxFrame_.header.TxFrameType = FDCAN_DATA_FRAME;
+    fdcan1TxFrame_.header.DataLength = FDCAN_DLC_BYTES_8;
+    fdcan1TxFrame_.header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    fdcan1TxFrame_.header.BitRateSwitch = FDCAN_BRS_OFF;
+    fdcan1TxFrame_.header.FDFormat = FDCAN_CLASSIC_CAN;
+    fdcan1TxFrame_.header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    fdcan1TxFrame_.header.MessageMarker = 0;
+    for (uint32_t i = 0; i < 8; ++i) fdcan1TxFrame_.data[i] = 0;
 
     /* FDCAN1 --------------------------------------------------------------*/
     FilterConfig.IdType       = FDCAN_EXTENDED_ID;
@@ -56,17 +51,17 @@ void BSP_CAN::Init(void)
 
     /* FDCAN3 (DJI 6020) -----------------------------------------------------*/
     /* 6020 用标准帧，与 VESC 的扩展帧不同，发送帧头必须按标准帧配置。 */
-    FDCAN3_TxFrame.hcan = &hfdcan3;
-    FDCAN3_TxFrame.Header.Identifier = 0x1FF;         // 1~4 号电机控制帧，发送前由协议层重设
-    FDCAN3_TxFrame.Header.IdType = FDCAN_STANDARD_ID;
-    FDCAN3_TxFrame.Header.TxFrameType = FDCAN_DATA_FRAME;
-    FDCAN3_TxFrame.Header.DataLength = FDCAN_DLC_BYTES_8;
-    FDCAN3_TxFrame.Header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    FDCAN3_TxFrame.Header.BitRateSwitch = FDCAN_BRS_OFF;
-    FDCAN3_TxFrame.Header.FDFormat = FDCAN_CLASSIC_CAN;
-    FDCAN3_TxFrame.Header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-    FDCAN3_TxFrame.Header.MessageMarker = 0;
-    for (uint32_t i = 0; i < 8; ++i) FDCAN3_TxFrame.Data[i] = 0;
+    fdcan3TxFrame_.hcan = &hfdcan3;
+    fdcan3TxFrame_.header.Identifier = 0x1FF;         // 1~4 号电机控制帧，发送前由协议层重设
+    fdcan3TxFrame_.header.IdType = FDCAN_STANDARD_ID;
+    fdcan3TxFrame_.header.TxFrameType = FDCAN_DATA_FRAME;
+    fdcan3TxFrame_.header.DataLength = FDCAN_DLC_BYTES_8;
+    fdcan3TxFrame_.header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    fdcan3TxFrame_.header.BitRateSwitch = FDCAN_BRS_OFF;
+    fdcan3TxFrame_.header.FDFormat = FDCAN_CLASSIC_CAN;
+    fdcan3TxFrame_.header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    fdcan3TxFrame_.header.MessageMarker = 0;
+    for (uint32_t i = 0; i < 8; ++i) fdcan3TxFrame_.data[i] = 0;
 
     /* 6020 反馈帧是标准帧（0x205~0x208），滤波器必须用 FDCAN_STANDARD_ID。
      * 用 FDCAN_EXTENDED_ID 会导致滤波器安装失败，帧被静默丢弃。 */
@@ -85,81 +80,75 @@ void BSP_CAN::Init(void)
     if (HAL_FDCAN_Start(&hfdcan3) != HAL_OK) Error_Handler();
 
 }
-/* ============================================================
- *  添加消息到发送FIFO队列
- * ============================================================ */
-void BSP_CAN::AddMessageToTxFifoQ(FDCAN_TxFrame_TypeDef *FDCAN_TxFrame)
+/** @brief 把已填好的帧放进硬件发送队列。 */
+void BspCan::AddMessageToTxFifoQ(FdcanTxFrame *txFrame)
 {
-    HAL_FDCAN_AddMessageToTxFifoQ(FDCAN_TxFrame->hcan,
-                                  &FDCAN_TxFrame->Header,
-                                  FDCAN_TxFrame->Data);
+    HAL_FDCAN_AddMessageToTxFifoQ(txFrame->hcan,
+                                  &txFrame->header,
+                                  txFrame->data);
 }
-/* ============================================================
- *  Vesc 总线接收回调，FDCAN1 FIFO1
- * ============================================================ */
-void BSP_CAN::RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
+/** @brief FDCAN1 FIFO1：取出 VESC 扩展帧并交给协议层。 */
+void BspCan::RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
 {
     (void)RxFifo1ITs;
 
-    FDCAN_RxFIFO1Frame.hcan = hfdcan;
+    fdcanRxFifo1Frame_.hcan = hfdcan;
     if (HAL_FDCAN_GetRxMessage(hfdcan,
                            FDCAN_RX_FIFO1,
-                           &FDCAN_RxFIFO1Frame.Header,
-                           FDCAN_RxFIFO1Frame.Data) != HAL_OK) return;
+                           &fdcanRxFifo1Frame_.header,
+                           fdcanRxFifo1Frame_.data) != HAL_OK) return;
 
-    /* VESC 状态帧必须是 29 位标准的数据帧，负载固定 8 字节。 */
-    if (FDCAN_RxFIFO1Frame.Header.IdType != FDCAN_EXTENDED_ID ||
-        FDCAN_RxFIFO1Frame.Header.RxFrameType != FDCAN_DATA_FRAME ||
-        FDCAN_RxFIFO1Frame.Header.DataLength != FDCAN_DLC_BYTES_8)
+    /* VESC 状态帧必须是 29 位扩展数据帧，负载固定 8 字节。 */
+    if (fdcanRxFifo1Frame_.header.IdType != FDCAN_EXTENDED_ID ||
+        fdcanRxFifo1Frame_.header.RxFrameType != FDCAN_DATA_FRAME ||
+        fdcanRxFifo1Frame_.header.DataLength != FDCAN_DLC_BYTES_8)
     {
         return;
     }
 
     /* VESC 总线：只把 ID 和数据交给协议层，硬件细节不往上透传 */
     if (hfdcan == &hfdcan1) {
-        VescMotor::ParseCanFeedback(FDCAN_RxFIFO1Frame.Header.Identifier,
-                                    FDCAN_RxFIFO1Frame.Data);
+        VescMotor::ParseCanFeedback(fdcanRxFifo1Frame_.header.Identifier,
+                                    fdcanRxFifo1Frame_.data);
     }
 }
 
 extern "C" void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
 {
-    BSP_CAN::RxFifo1Callback(hfdcan, RxFifo1ITs);
+    BspCan::RxFifo1Callback(hfdcan, RxFifo1ITs);
 }
-/* ============================================================
- *  dji6020 总线接收回调，FDCAN3 FIFO0
- * ============================================================ */
-void BSP_CAN::RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
+/** @brief FDCAN3 FIFO0：取出 6020 标准帧并交给协议层。 */
+void BspCan::RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
     (void)RxFifo0ITs;
 
-    FDCAN_RxFIFO0Frame.hcan = hfdcan;
+    fdcanRxFifo0Frame_.hcan = hfdcan;
     if (HAL_FDCAN_GetRxMessage(hfdcan,
                            FDCAN_RX_FIFO0,
-                           &FDCAN_RxFIFO0Frame.Header,
-                           FDCAN_RxFIFO0Frame.Data) != HAL_OK) return;
+                           &fdcanRxFifo0Frame_.header,
+                           fdcanRxFifo0Frame_.data) != HAL_OK) return;
 
     /* DJI 6020 反馈必须是 11 位标准的数据帧，负载固定 8 字节。 */
-    if (FDCAN_RxFIFO0Frame.Header.IdType != FDCAN_STANDARD_ID ||
-        FDCAN_RxFIFO0Frame.Header.RxFrameType != FDCAN_DATA_FRAME ||
-        FDCAN_RxFIFO0Frame.Header.DataLength != FDCAN_DLC_BYTES_8)
+    if (fdcanRxFifo0Frame_.header.IdType != FDCAN_STANDARD_ID ||
+        fdcanRxFifo0Frame_.header.RxFrameType != FDCAN_DATA_FRAME ||
+        fdcanRxFifo0Frame_.header.DataLength != FDCAN_DLC_BYTES_8)
     {
         return;
     }
 
     /* 6020 总线：只把 ID 和数据交给协议层，硬件细节不往上透传 */
     if (hfdcan == &hfdcan3) {
-        Dji6020Bus::ParseFeedback(FDCAN_RxFIFO0Frame.Header.Identifier,
-                              FDCAN_RxFIFO0Frame.Data);
+        Dji6020Bus::ParseFeedback(fdcanRxFifo0Frame_.header.Identifier,
+                              fdcanRxFifo0Frame_.data);
     }
 }
 
 extern "C" void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
-    BSP_CAN::RxFifo0Callback(hfdcan, RxFifo0ITs);
+    BspCan::RxFifo0Callback(hfdcan, RxFifo0ITs);
 }
 
-void BSP_CAN::CheckBusOff(FDCAN_HandleTypeDef *hfdcan)
+void BspCan::CheckBusOff(FDCAN_HandleTypeDef *hfdcan)
 {
     if (hfdcan == nullptr) return;
 

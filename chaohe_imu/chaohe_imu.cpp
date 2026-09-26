@@ -2,12 +2,8 @@
 
 #include <string.h>
 
-#include "dma.h"
-#include "remote_input.h"
+#include "bsp_uart.h"
 
-ChaoheImu g_chaoheImu;
-
-/** @brief 绑定串口并启动 DMA 循环接收。 */
 HAL_StatusTypeDef ChaoheImu::Init(UART_HandleTypeDef *uart)
 {
     if (uart == nullptr || uart->hdmarx == nullptr)
@@ -19,13 +15,18 @@ HAL_StatusTypeDef ChaoheImu::Init(UART_HandleTypeDef *uart)
     rxIndex_ = 0;
     memset(&decoder_, 0, sizeof(decoder_));
     state_ = ChaoheImuState{};
-    return startReceive();
+    const HAL_StatusTypeDef status = BspUart::StartReceive(
+        uart_, rxBuf_, RX_BUF_NUM, this, nullptr, &ChaoheImu::HandleError);
+    if (status == HAL_OK)
+    {
+        rxIndex_ = 0;
+    }
+    return status;
 }
 
-/** @brief 取出 DMA 新字节解码 HI91；超过 100 ms 无合法帧则离线。 */
-void ChaoheImu::update()
+void ChaoheImu::Update()
 {
-    drainRx();
+    DrainRx();
 
     if (state_.validFrames != 0U &&
         (HAL_GetTick() - state_.lastUpdateTick) > ONLINE_TIMEOUT_MS)
@@ -34,52 +35,22 @@ void ChaoheImu::update()
     }
 }
 
-/** @brief 空闲中断只表明有新数据，解码统一放到 update()，避免和任务抢 decoder_。 */
-void ChaoheImu::onRxEvent(UART_HandleTypeDef *uart, uint16_t size)
+void ChaoheImu::HandleError(void *context, UART_HandleTypeDef *uart)
 {
     (void)uart;
-    (void)size;
+    ChaoheImu *self = static_cast<ChaoheImu *>(context);
+    self->rxIndex_ = 0;
+    memset(&self->decoder_, 0, sizeof(self->decoder_));
 }
 
-/** @brief 丢弃当前接收，清除溢出标志并重新挂起 DMA。 */
-void ChaoheImu::onError(UART_HandleTypeDef *uart)
+void ChaoheImu::DrainRx()
 {
-    if (uart != uart_)
+    if (uart_ == nullptr)
     {
         return;
     }
 
-    rxIndex_ = 0;
-    memset(&decoder_, 0, sizeof(decoder_));
-    __HAL_UART_CLEAR_OREFLAG(uart);
-    startReceive();
-}
-
-/** @brief 启动 UART DMA 空闲接收，并关闭半传输中断。 */
-HAL_StatusTypeDef ChaoheImu::startReceive()
-{
-    const HAL_StatusTypeDef status =
-        HAL_UARTEx_ReceiveToIdle_DMA(uart_, rxBuf_, RX_BUF_NUM);
-
-    if (status == HAL_OK && uart_->hdmarx != nullptr)
-    {
-        __HAL_DMA_DISABLE_IT(uart_->hdmarx, DMA_IT_HT);
-        rxIndex_ = 0;
-    }
-
-    return status;
-}
-
-/** @brief 按 DMA 写入位置取出新字节，交给官方解析器找 HI91 帧。 */
-void ChaoheImu::drainRx()
-{
-    if (uart_ == nullptr || uart_->hdmarx == nullptr)
-    {
-        return;
-    }
-
-    const uint16_t pos = static_cast<uint16_t>(
-        RX_BUF_NUM - __HAL_DMA_GET_COUNTER(uart_->hdmarx));
+    const uint16_t pos = BspUart::WriteIndex(uart_, RX_BUF_NUM);
 
     while (rxIndex_ != pos)
     {
@@ -89,13 +60,12 @@ void ChaoheImu::drainRx()
         if (hipnuc_input(&decoder_, byte) > 0 &&
             decoder_.hi91.tag == HIPNUC_ID_HI91)
         {
-            applyHi91(decoder_.hi91);
+            ApplyHi91(decoder_.hi91);
         }
     }
 }
 
-/** @brief 把 HI91 线单位填进对外状态，不换成 SI，方便对照说明书。 */
-void ChaoheImu::applyHi91(const hi91_t &frame)
+void ChaoheImu::ApplyHi91(const hi91_t &frame)
 {
     state_.roll = frame.roll;
     state_.pitch = frame.pitch;
@@ -120,15 +90,3 @@ void ChaoheImu::applyHi91(const hi91_t &frame)
 }
 
 /** @brief HAL 空闲接收完成回调：按串口分发给遥控器和 IMU。 */
-extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *uart, uint16_t size)
-{
-    g_remoteInput.onRxEvent(uart, size);
-    g_chaoheImu.onRxEvent(uart, size);
-}
-
-/** @brief HAL 串口错误回调：按串口分发给遥控器和 IMU。 */
-extern "C" void HAL_UART_ErrorCallback(UART_HandleTypeDef *uart)
-{
-    g_remoteInput.onError(uart);
-    g_chaoheImu.onError(uart);
-}

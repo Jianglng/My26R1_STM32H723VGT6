@@ -2,8 +2,6 @@
 
 #include <stdint.h>
 
-#include "robot_config.h"
-
 /**
  * @brief PID 可选功能，可按位或。
  * @note 输出限幅始终生效。
@@ -28,37 +26,9 @@ struct PidParam
     uint8_t improve;       ///< PidImprove 位掩码。
 };
 
-namespace PidCfg
-{
-    const uint32_t STEER_COUNT = RobotConfig::WHEEL_COUNT;
-    const float ENCODER_RANGE = RobotConfig::DJI_ENCODER_MAX;
-
-    const PidParam STEER_ANGLE =
-    {
-        RobotConfig::STEER_ANGLE_MAX,
-        RobotConfig::STEER_ANGLE_I_LIMIT,
-        RobotConfig::STEER_ANGLE_DEADBAND,
-        RobotConfig::STEER_ANGLE_KP,
-        RobotConfig::STEER_ANGLE_KI,
-        RobotConfig::STEER_ANGLE_KD,
-        PID_IMPROVE_INTEGRAL_LIMIT
-    };
-
-    const PidParam STEER_SPEED =
-    {
-        RobotConfig::STEER_SPEED_MAX,
-        RobotConfig::STEER_SPEED_I_LIMIT,
-        RobotConfig::STEER_SPEED_DEADBAND,
-        RobotConfig::STEER_SPEED_KP,
-        RobotConfig::STEER_SPEED_KI,
-        RobotConfig::STEER_SPEED_KD,
-        PID_IMPROVE_INTEGRAL_LIMIT
-    };
-}
-
 /**
  * @brief 单路 PID 的参数和运行状态。
- * @note 调试时 Watch 对象的 state。dt 单位是毫秒，1 kHz 时应接近 1。
+ * @note 调试时 Watch 对象的 state_。dt 单位是毫秒，1 kHz 时应接近 1。
  */
 struct PidState
 {
@@ -92,20 +62,22 @@ struct PidState
  * @brief 位置式 PID，时间间隔由 DWT 实测后换成毫秒。
  *
  * 输出饱和且误差仍朝同一方向时停止积分。
- * 6020 角度环请用 calculateEncoder()，避免编码器过零打满。
+ * 6020 角度环请用 CalculateEncoder()，避免编码器过零打满。
  */
+class DwtTimer;
+
 class Pid
 {
 public:
-    PidState state;   ///< 公开状态，方便调试器展开观察。
+    PidState state_;   ///< 公开状态，方便调试器展开观察。
 
     Pid();
 
     /**
      * @brief 写入参数并清零积分、误差历史。
-     * @param param 例如 PidCfg::STEER_ANGLE、PidCfg::STEER_SPEED。
+     * @param param 例如 RobotConfig::STEER_ANGLE、RobotConfig::STEER_SPEED。
      */
-    void Init(const PidParam &param);
+    void Init(const PidParam &param, DwtTimer &timer);
 
     /** @brief 清零积分和输出。遥控器离线时应调用。 */
     void Reset();
@@ -116,7 +88,7 @@ public:
      * @param ref 目标值。
      * @return 限幅后的输出。
      */
-    float calculate(float measure, float ref);
+    float Calculate(float measure, float ref);
 
     /**
      * @brief 带编码器过零的 PID，给 6020 角度环用。
@@ -125,20 +97,11 @@ public:
      * @param encoderRange 一圈刻度，6020 为 8192。
      * @return 限幅后的输出。
      */
-    float calculateEncoder(float measure, float ref, float encoderRange);
+    float CalculateEncoder(float measure, float ref, float encoderRange);
 
 private:
-    float wrapEncoderError(float err, float range) const;
-    void applyIntegralLimit();
-    void applyOutputLimit();
-    float run(float err);
+    DwtTimer* timer_ = nullptr;
+    void ApplyIntegralLimit();
+    void ApplyOutputLimit();
+    float Run(float err);
 };
-
-/** @brief 三个舵向角度环，下标 0/1/2 对应前/左/右。 */
-extern Pid g_steerAnglePid[PidCfg::STEER_COUNT];
-
-/** @brief 三个舵向速度环，下标与角度环一致。 */
-extern Pid g_steerSpeedPid[PidCfg::STEER_COUNT];
-
-/** @brief 按参考底盘参数初始化全部舵向 PID。须在 DWT_.Init() 之后调用。 */
-void InitChassisPid();

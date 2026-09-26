@@ -45,3 +45,24 @@ Thumbs.db
 
 # Keep source-control metadata and project source files
 !.gitignore
+
+# Keil 把输出放在工程子目录，MDK-ARM/*.o 匹配不到这一层
+MDK-ARM/My26R1_STM32H723VGT6/
+MDK-ARM/**/*.axf
+MDK-ARM/**/*.elf
+MDK-ARM/**/*.hex
+MDK-ARM/**/*.bin
+MDK-ARM/**/*.map
+MDK-ARM/**/*.lst
+MDK-ARM/**/*.htm
+MDK-ARM/**/*.crf
+MDK-ARM/**/*.o
+MDK-ARM/**/*.d
+MDK-ARM/**/*.dep
+MDK-ARM/**/*.lnp
+MDK-ARM/**/*.iex
+MDK-ARM/**/*.scvd
+
+# 本地编译日志
+MDK-ARM/build_*.txt
+MDK-ARM/build_*.log

@@ -1,9 +1,9 @@
 #include "remote_input.h"
 
-// 全局遥控器对象，由底盘任务初始化和读取。
-RemoteInput g_remoteInput;
+#include <string.h>
 
-/** @brief 绑定串口并启动 DMA 空闲接收。 */
+#include "bsp_uart.h"
+
 HAL_StatusTypeDef RemoteInput::Init(UART_HandleTypeDef *uart)
 {
     if (uart == nullptr || uart->hdmarx == nullptr)
@@ -12,71 +12,98 @@ HAL_StatusTypeDef RemoteInput::Init(UART_HandleTypeDef *uart)
     }
 
     uart_ = uart;
-    return startReceive();
+    lastIndex_ = 0U;
+    return BspUart::StartReceive(uart_, rxBuf_, RX_BUF_NUM, this,
+                                 &RemoteInput::HandleRx, &RemoteInput::HandleError);
 }
 
-/** @brief 超过 300 ms 没有合法帧时，认为遥控器失联。 */
-void RemoteInput::update()
+RemoteState RemoteInput::State()
 {
-    if (state_.validFrames != 0U &&
-        (HAL_GetTick() - state_.lastUpdateTick) > 300U)
+    const uint32_t now = HAL_GetTick();
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
+    RemoteState copy = state_;
+    if (copy.validFrames != 0U && (now - copy.lastUpdateTick) > ONLINE_TIMEOUT_MS)
     {
         state_.online = false;
+        copy.online = false;
     }
+
+    __set_PRIMASK(primask);
+    return copy;
 }
 
-/** @brief 空闲中断收到一包数据后，只解码完整的 18 字节 SBUS 帧。 */
-void RemoteInput::onRxEvent(UART_HandleTypeDef *uart, uint16_t size)
+void RemoteInput::HandleRx(void *context, UART_HandleTypeDef *uart, uint16_t size)
+{
+    static_cast<RemoteInput *>(context)->OnRxEvent(uart, size);
+}
+
+void RemoteInput::HandleError(void *context, UART_HandleTypeDef *uart)
+{
+    static_cast<RemoteInput *>(context)->OnError(uart);
+}
+
+void RemoteInput::OnError(UART_HandleTypeDef *uart)
 {
     if (uart != uart_)
     {
         return;
     }
 
-    if (size == FRAME_LENGTH)
-    {
-        decode(rxBuf_);
-    }
+    lastIndex_ = 0U;
 }
 
-/** @brief 丢弃当前接收，清除溢出标志并重新挂起 DMA。 */
-void RemoteInput::onError(UART_HandleTypeDef *uart)
+void RemoteInput::OnRxEvent(UART_HandleTypeDef *uart, uint16_t size)
 {
-    if (uart != uart_)
+    /* size 是循环 DMA 这一圈的写位置，不是本帧长度。
+     * 绕回时 HAL 传入缓冲区长度，写位置记为 0。
+     * 距上次处理正好 18 字节才解码；同一位置的重复回调距离为 0，直接丢掉。
+     * 长度不是 18 也推进 lastIndex_，下一帧才能重新对齐。 */
+    if (uart != uart_ || size == 0U || size > RX_BUF_NUM)
     {
         return;
     }
 
-    __HAL_UART_CLEAR_OREFLAG(uart);
-    startReceive();
-}
+    const uint16_t writeIndex = (size == RX_BUF_NUM) ? 0U : size;
+    const uint16_t received =
+        static_cast<uint16_t>((writeIndex + RX_BUF_NUM - lastIndex_) % RX_BUF_NUM);
 
-/** @brief 启动 UART DMA 空闲接收，并关闭半传输中断。 */
-HAL_StatusTypeDef RemoteInput::startReceive()
-{
-    const HAL_StatusTypeDef status =
-        HAL_UARTEx_ReceiveToIdle_DMA(uart_, rxBuf_, RX_BUF_NUM);
-
-    if (status == HAL_OK && uart_->hdmarx != nullptr)
+    if (received == FRAME_LENGTH)
     {
-        __HAL_DMA_DISABLE_IT(uart_->hdmarx, DMA_IT_HT);
+        uint8_t frame[FRAME_LENGTH];
+        const uint16_t tail = static_cast<uint16_t>(RX_BUF_NUM - lastIndex_);
+        if (tail >= FRAME_LENGTH)
+        {
+            memcpy(frame, &rxBuf_[lastIndex_], FRAME_LENGTH);
+        }
+        else
+        {
+            memcpy(frame, &rxBuf_[lastIndex_], tail);
+            memcpy(&frame[tail], rxBuf_, static_cast<size_t>(FRAME_LENGTH - tail));
+        }
+        Decode(frame);
     }
 
-    return status;
+    if (received != 0U)
+    {
+        lastIndex_ = writeIndex;
+    }
 }
 
-/** @brief 按大疆官方 SBUS 位域拆出通道、拨杆、鼠标和键盘。 */
-void RemoteInput::decode(const uint8_t *sbus)
+void RemoteInput::Decode(const uint8_t *sbus)
 {
     if (sbus == nullptr)
     {
         return;
     }
 
-    state_.ch[0] = static_cast<int16_t>((sbus[0] | (sbus[1] << 8)) & 0x07FF);
-    state_.ch[1] = static_cast<int16_t>(((sbus[1] >> 3) | (sbus[2] << 5)) & 0x07FF);
-    state_.ch[2] = static_cast<int16_t>(((sbus[2] >> 6) | (sbus[3] << 2) | (sbus[4] << 10)) & 0x07FF);
-    state_.ch[3] = static_cast<int16_t>(((sbus[4] >> 1) | (sbus[5] << 7)) & 0x07FF);
+    const int16_t ch0 = static_cast<int16_t>(((sbus[0] | (sbus[1] << 8)) & 0x07FF) - CH_OFFSET);
+    const int16_t ch1 = static_cast<int16_t>((((sbus[1] >> 3) | (sbus[2] << 5)) & 0x07FF) - CH_OFFSET);
+    const int16_t ch2 = static_cast<int16_t>((((sbus[2] >> 6) | (sbus[3] << 2) | (sbus[4] << 10)) & 0x07FF) - CH_OFFSET);
+    const int16_t ch3 = static_cast<int16_t>((((sbus[4] >> 1) | (sbus[5] << 7)) & 0x07FF) - CH_OFFSET);
+    const int16_t ch4 = static_cast<int16_t>((sbus[16] | (sbus[17] << 8)) - CH_OFFSET);
+
     state_.rightSwitch = static_cast<uint8_t>((sbus[5] >> 4) & 0x03U);
     state_.leftSwitch = static_cast<uint8_t>(((sbus[5] >> 4) & 0x0CU) >> 2);
     state_.mouseX = static_cast<int16_t>(sbus[6] | (sbus[7] << 8));
@@ -85,24 +112,15 @@ void RemoteInput::decode(const uint8_t *sbus)
     state_.mouseLeft = sbus[12];
     state_.mouseRight = sbus[13];
     state_.key = static_cast<uint16_t>(sbus[14] | (sbus[15] << 8));
-    state_.ch[4] = static_cast<int16_t>(sbus[16] | (sbus[17] << 8));
 
-    state_.ch[0] = static_cast<int16_t>(state_.ch[0] - CH_OFFSET);
-    state_.ch[1] = static_cast<int16_t>(state_.ch[1] - CH_OFFSET);
-    state_.ch[2] = static_cast<int16_t>(state_.ch[2] - CH_OFFSET);
-    state_.ch[3] = static_cast<int16_t>(state_.ch[3] - CH_OFFSET);
-    state_.ch[4] = static_cast<int16_t>(state_.ch[4] - CH_OFFSET);
-
-    state_.rightX = state_.ch[0];
-    state_.rightY = state_.ch[1];
+    state_.rightX = ch0;
+    state_.rightY = ch1;
     /* 本机实测：ch2 是左摇杆左右，ch3 是左摇杆上下。 */
-    state_.leftX = state_.ch[2];
-    state_.leftY = state_.ch[3];
+    state_.leftX = ch2;
+    state_.leftY = ch3;
+    state_.wheel = ch4;
 
     ++state_.validFrames;
     state_.lastUpdateTick = HAL_GetTick();
     state_.online = true;
 }
-
-/* HAL_UARTEx_RxEventCallback / HAL_UART_ErrorCallback 只在 chaohe_imu.cpp 里实现一次，
- * 那里会按串口分发给遥控器和 IMU。这里不要再定义，否则链接会报 multiply defined。 */

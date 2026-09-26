@@ -56,13 +56,12 @@ struct VescRxData
     float pidPositionLast;  ///< 上一帧角度，用于过零。
     int   turnCount;        ///< 过零圈数。
     float totalPosition;    ///< turnCount×360 + pidPositionNow。
-    float dutyCycle;        ///< 与 duty 相同，兼容旧读取。
     bool  hasPosition;      ///< 是否已收到过 STATUS_4。
 
     VescRxData()
         : eRpm(0.f), rpm(0.f), duty(0.f), totalCurrent(0.f)
         , pidPositionNow(0.f), pidPositionLast(0.f)
-        , turnCount(0), totalPosition(0.f), dutyCycle(0.f), hasPosition(false)
+        , turnCount(0), totalPosition(0.f), hasPosition(false)
     {}
 };
 
@@ -71,29 +70,28 @@ class VescMotor
 public:
     VescMotor();
 
-    /** @brief 绑定 FDCAN 句柄和节点号。滤波器与启动由 BSP_CAN::Init() 完成。 */
+    /** @brief 绑定 FDCAN 句柄和节点号。滤波器与启动由 BspCan::Init() 完成。 */
     void Init(FDCAN_HandleTypeDef *hfdcan, uint16_t nodeId);
 
     /** @brief 力矩电流，单位 mA，正转正值。协议按 A×1000 发送。 */
-    void setCurrent(int32_t current_mA);
+    void SetCurrent(int32_t current_mA);
 
-    /** @brief 机械转速 RPM。发送前乘 POLE_PAIRS 转为 eRPM。 */
-    void setRpm(int32_t rpm);
+    void SetRpm(int32_t rpm);
 
     /** @brief 占空比 -1.0~1.0。底盘未使用。 */
-    void setPwm(double pwm);
+    void SetPwm(double pwm);
 
     /** @brief 位置模式原始值。底盘未使用。 */
-    void setPos(int32_t pos);
+    void SetPos(int32_t pos);
 
-    /** @brief 专用制动电流，mA。与 setCurrent 负值不同，只制动不驱动。 */
-    void setBrakeCurrent(int32_t current_mA);
+    /** @brief 专用制动电流，mA。与 SetCurrent 负值不同，只制动不驱动。 */
+    void SetBrakeCurrent(int32_t current_mA);
 
     /** @brief 手刹电流，mA，用于位置保持。底盘未使用。 */
-    void setHandbrakeCurrent(int32_t current_mA);
+    void SetHandbrakeCurrent(int32_t current_mA);
 
     /** @brief 手刹比例 0~1。底盘未使用。 */
-    void setHandbrakeCurrentRel(float relative);
+    void SetHandbrakeCurrentRel(float relative);
 
     /**
      * @brief 解析一帧已取出的反馈。
@@ -101,25 +99,26 @@ public:
      */
     static void ParseCanFeedback(uint32_t identifier, const uint8_t data[8]);
 
-    const VescRxData &getRxData() const { return rxData_; }
-    uint16_t getNodeId() const { return nodeId_; }
-    FDCAN_HandleTypeDef *getFdcan() const { return hfdcan_; }
+    VescRxData GetRxData() const;
+    uint16_t GetNodeId() const { return nodeId_; }
+    FDCAN_HandleTypeDef *GetFdcan() const { return hfdcan_; }
 
 private:
     FDCAN_HandleTypeDef *hfdcan_;
     uint16_t nodeId_;
     VescRxData rxData_;
 
-    static constexpr int POLE_PAIRS = RobotConfig::VESC_POLE_PAIRS;
 
     /** @brief 组一帧扩展数据帧；hfdcan_ 不是 FDCAN1 则不发送。 */
-    void sendFrame(CanPacketID cmd, const uint8_t data[8]);
+    void SendFrame(CanPacketID cmd, const uint8_t data[8]);
 
     /** @brief 大端拆 int32 到 data[0..3]。Cortex-M 上有符号右移是算术右移。 */
-    static void packInt32BigEndian(int32_t val, uint8_t *data);
+    static void PackInt32BigEndian(int32_t val, uint8_t *data);
 
-    void parseStatusPayload(CanPacketID cmd, const uint8_t data[8]);
+    void ParseStatusPayload(CanPacketID cmd, const uint8_t data[8]);
+
+    static VescMotor* registry_[RobotConfig::WHEEL_COUNT];
+    static uint32_t registryCount_;
+
+    void Register();
 };
-
-/** @brief 三个轮向电调，使用前调用 Init()。下标 0/1/2 对应前/左/右。 */
-extern VescMotor VescMotors[3];

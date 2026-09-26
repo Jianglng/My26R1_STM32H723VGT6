@@ -1,8 +1,7 @@
 #include "bsp_dwt.h"
 
-DWT_Timer DWT_;
 
-void DWT_Timer::Init(uint32_t cpu_freq_mhz)
+void DwtTimer::Init(uint32_t cpu_freq_mhz)
 {
     if (cpu_freq_mhz == 0U)
     {
@@ -13,121 +12,121 @@ void DWT_Timer::Init(uint32_t cpu_freq_mhz)
     DWT->CYCCNT = 0U;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
-    cpu_freq_hz_ = cpu_freq_mhz * 1000000U;
-    cpu_freq_hz_ms_ = cpu_freq_hz_ / 1000U;
-    cpu_freq_hz_us_ = cpu_freq_hz_ / 1000000U;
+    cpuFreqHz_ = cpu_freq_mhz * 1000000U;
+    cpuFreqHzMs_ = cpuFreqHz_ / 1000U;
+    cpuFreqHzUs_ = cpuFreqHz_ / 1000000U;
 
-    cyccnt_round_count_ = 0U;
-    cyccnt_last_ = DWT->CYCCNT;
+    cyccntRoundCount_ = 0U;
+    cyccntLast_ = DWT->CYCCNT;
     cyccnt64_ = 0U;
 
-    sysTime.s = 0U;
-    sysTime.ms = 0U;
-    sysTime.us = 0U;
+    sysTime_.s = 0U;
+    sysTime_.ms = 0U;
+    sysTime_.us = 0U;
 }
 
-float DWT_Timer::getDeltaT(uint32_t *cnt_last)
+float DwtTimer::GetDeltaT(uint32_t *cnt_last)
 {
-    if (cnt_last == nullptr || cpu_freq_hz_ == 0U)
+    if (cnt_last == nullptr || cpuFreqHz_ == 0U)
     {
         return 0.001f;
     }
 
     const uint32_t cnt_now = DWT->CYCCNT;
     const float dt = static_cast<float>(cnt_now - *cnt_last)
-                   / static_cast<float>(cpu_freq_hz_);
+                   / static_cast<float>(cpuFreqHz_);
     *cnt_last = cnt_now;
-    cntUpdate();
+    CntUpdate();
     return dt;
 }
 
-double DWT_Timer::getDeltaT64(uint32_t *cnt_last)
+double DwtTimer::GetDeltaT64(uint32_t *cnt_last)
 {
-    if (cnt_last == nullptr || cpu_freq_hz_ == 0U)
+    if (cnt_last == nullptr || cpuFreqHz_ == 0U)
     {
         return 0.001;
     }
 
     const uint32_t cnt_now = DWT->CYCCNT;
     const double dt = static_cast<double>(cnt_now - *cnt_last)
-                    / static_cast<double>(cpu_freq_hz_);
+                    / static_cast<double>(cpuFreqHz_);
     *cnt_last = cnt_now;
-    cntUpdate();
+    CntUpdate();
     return dt;
 }
 
-void DWT_Timer::sysTimeUpdate()
+void DwtTimer::SysTimeUpdate()
 {
-    if (cpu_freq_hz_ == 0U)
+    if (cpuFreqHz_ == 0U)
     {
         return;
     }
 
     const uint32_t cnt_now = DWT->CYCCNT;
-    cntUpdate();
+    CntUpdate();
 
-    cyccnt64_ = (uint64_t)cyccnt_round_count_ * 4294967296ULL + (uint64_t)cnt_now;
+    cyccnt64_ = static_cast<uint64_t>(cyccntRoundCount_) * 4294967296ULL + static_cast<uint64_t>(cnt_now);
 
-    const uint64_t sec_part = cyccnt64_ / cpu_freq_hz_;
-    const uint64_t rem_part = cyccnt64_ - sec_part * cpu_freq_hz_;
-    const uint64_t ms_part = rem_part / cpu_freq_hz_ms_;
-    const uint64_t rem_part2 = rem_part - ms_part * cpu_freq_hz_ms_;
-    const uint64_t us_part = rem_part2 / cpu_freq_hz_us_;
+    const uint64_t sec_part = cyccnt64_ / cpuFreqHz_;
+    const uint64_t rem_part = cyccnt64_ - sec_part * cpuFreqHz_;
+    const uint64_t ms_part = rem_part / cpuFreqHzMs_;
+    const uint64_t rem_part2 = rem_part - ms_part * cpuFreqHzMs_;
+    const uint64_t us_part = rem_part2 / cpuFreqHzUs_;
 
-    sysTime.s = (uint32_t)sec_part;
-    sysTime.ms = (uint16_t)ms_part;
-    sysTime.us = (uint16_t)us_part;
+    sysTime_.s = static_cast<uint32_t>(sec_part);
+    sysTime_.ms = static_cast<uint16_t>(ms_part);
+    sysTime_.us = static_cast<uint16_t>(us_part);
 }
 
-float DWT_Timer::getTimeline_s()
+float DwtTimer::GetTimelineS()
 {
-    sysTimeUpdate();
-    return (float)sysTime.s
-         + (float)sysTime.ms * 0.001f
-         + (float)sysTime.us * 0.000001f;
+    SysTimeUpdate();
+    return static_cast<float>(sysTime_.s)
+         + static_cast<float>(sysTime_.ms) * 0.001f
+         + static_cast<float>(sysTime_.us) * 0.000001f;
 }
 
-float DWT_Timer::getTimeline_ms()
+float DwtTimer::GetTimelineMs()
 {
-    sysTimeUpdate();
-    return (float)sysTime.s * 1000.0f
-         + (float)sysTime.ms
-         + (float)sysTime.us * 0.001f;
+    SysTimeUpdate();
+    return static_cast<float>(sysTime_.s) * 1000.0f
+         + static_cast<float>(sysTime_.ms)
+         + static_cast<float>(sysTime_.us) * 0.001f;
 }
 
-uint64_t DWT_Timer::getTimeline_us()
+uint64_t DwtTimer::GetTimelineUs()
 {
-    sysTimeUpdate();
-    return (uint64_t)sysTime.s * 1000000ULL
-         + (uint64_t)sysTime.ms * 1000ULL
-         + (uint64_t)sysTime.us;
+    SysTimeUpdate();
+    return static_cast<uint64_t>(sysTime_.s) * 1000000ULL
+         + static_cast<uint64_t>(sysTime_.ms) * 1000ULL
+         + static_cast<uint64_t>(sysTime_.us);
 }
 
-void DWT_Timer::delay_s(float delay_s)
+void DwtTimer::DelayS(float seconds)
 {
-    if (cpu_freq_hz_ == 0U || delay_s <= 0.0f)
+    if (cpuFreqHz_ == 0U || seconds <= 0.0f)
     {
         return;
     }
 
     const uint32_t tickstart = DWT->CYCCNT;
-    uint32_t wait_ticks = (uint32_t)(delay_s * (float)cpu_freq_hz_);
+    uint32_t wait_ticks = static_cast<uint32_t>(seconds * static_cast<float>(cpuFreqHz_));
     if (wait_ticks == 0U)
     {
         wait_ticks = 1U;
     }
 
-    while ((uint32_t)(DWT->CYCCNT - tickstart) < wait_ticks)
+    while (static_cast<uint32_t>(DWT->CYCCNT - tickstart) < wait_ticks)
     {
     }
 }
 
-void DWT_Timer::cntUpdate()
+void DwtTimer::CntUpdate()
 {
     const uint32_t cnt_now = DWT->CYCCNT;
-    if (cnt_now < cyccnt_last_)
+    if (cnt_now < cyccntLast_)
     {
-        cyccnt_round_count_++;
+        cyccntRoundCount_++;
     }
-    cyccnt_last_ = cnt_now;
+    cyccntLast_ = cnt_now;
 }

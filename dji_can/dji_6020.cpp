@@ -1,40 +1,30 @@
 /**
- *  DJI 6020 协议层实现
+ * @brief DJI 6020 协议层实现。
  *
- *  职责边界：
- *    本文件 —— 电流标定、控制帧打包、反馈帧解析、累计角度
- *    bsp_can —— 滤波器、外设启动、中断注册、发送帧对象、总线恢复
- *
- *  因此本文件里看不到任何 ConfigFilter / Start / ActivateNotification，
- *  只有一个"把 8 字节交给 BSP_CAN 发出去"的动作。
+ * 这里做电流标定、控制帧打包、反馈解析和累计角度。
+ * 滤波器、启动、中断和发送帧在 bsp_can，本文件只把 8 字节交给它发出去。
  */
 
 #include "dji_6020.h"
 
-#include "bsp_can.h"   // BSP_CAN::AddMessageToTxFifoQ / FDCAN3_TxFrame / CheckBusOff
+#include "bsp_can.h"
 
-/* ============================================================
- *  静态成员定义
- * ============================================================ */
 Dji6020Bus::ControlSlot Dji6020Bus::ctrlSlot_[Dji6020Cfg::MOTOR_ID_MAX];
 bool                    Dji6020Bus::hasMotor_ = false;
 
-/* 全局电机对象（三个 6020） */
-Dji6020Motor Dji6020Motors[Dji6020Cfg::MOTOR_MAX];
-
-/* ============================================================
- *  Dji6020Bus 实现
- * ============================================================ */
+/* 已注册的电机。下标是机械位置，不是 CAN ID。 */
+Dji6020Motor* Dji6020Bus::motors_[RobotConfig::WHEEL_COUNT] = {};
+uint32_t Dji6020Bus::motorCount_ = 0;
 
 /**
- * @brief  把三个电机的目标电流打包成控制帧并交给 BSP_CAN 下发
+ * @brief 把已注册电机的目标电流打包成控制帧，交给 BspCan 发送。
  * @note   建议 1 kHz 调用，与 6020 的反馈帧率对齐。
  *
  *         注意"写 0"和"不写入"在电调看来是两回事：停止下发会让电调
  *         进入失联保护，而写 0 是明确的零力矩指令。所以只要电机
  *         Init() 过，就应该一直留在控制帧里。
  */
-void Dji6020Bus::Control(void)
+void Dji6020Bus::Control()
 {
     if (!hasMotor_)
     {
@@ -43,7 +33,7 @@ void Dji6020Bus::Control(void)
 
     /* 总线异常先恢复，避免持续发送无效帧把 TX FIFO 塞满
      * （FIFO 只有 8 深，满了之后 HAL 会返回错误并丢帧） */
-    BSP_CAN::CheckBusOff(&hfdcan3);
+    BspCan::CheckBusOff(&hfdcan3);
 
     /* --- 收集各电机电流 ---
      * 控制槽按电机 ID 排列：下标 0~3 对应 0x1FF，下标 4~7 对应
@@ -96,12 +86,12 @@ void Dji6020Bus::Control(void)
             data[i * 2U + 1] = static_cast<uint8_t>(current[i] & 0xFF);
         }
 
-        BSP_CAN::FDCAN3_TxFrame.Header.Identifier = Dji6020Cfg::CTRL_ID_GROUP1;
+        BspCan::fdcan3TxFrame_.header.Identifier = Dji6020Cfg::CTRL_ID_GROUP1;
         for (uint32_t i = 0; i < 8U; ++i)
         {
-            BSP_CAN::FDCAN3_TxFrame.Data[i] = data[i];
+            BspCan::fdcan3TxFrame_.data[i] = data[i];
         }
-        BSP_CAN::AddMessageToTxFifoQ(&BSP_CAN::FDCAN3_TxFrame);
+        BspCan::AddMessageToTxFifoQ(&BspCan::fdcan3TxFrame_);
     }
 
     if (group2Enabled)
@@ -112,12 +102,12 @@ void Dji6020Bus::Control(void)
             data[i * 2U + 1] = static_cast<uint8_t>(current[i + 4U] & 0xFF);
         }
 
-        BSP_CAN::FDCAN3_TxFrame.Header.Identifier = Dji6020Cfg::CTRL_ID_GROUP2;
+        BspCan::fdcan3TxFrame_.header.Identifier = Dji6020Cfg::CTRL_ID_GROUP2;
         for (uint32_t i = 0; i < 8U; ++i)
         {
-            BSP_CAN::FDCAN3_TxFrame.Data[i] = data[i];
+            BspCan::fdcan3TxFrame_.data[i] = data[i];
         }
-        BSP_CAN::AddMessageToTxFifoQ(&BSP_CAN::FDCAN3_TxFrame);
+        BspCan::AddMessageToTxFifoQ(&BspCan::fdcan3TxFrame_);
     }
 
     /* 顺带更新在线状态，调用方不必额外维护 */
@@ -155,9 +145,9 @@ void Dji6020Bus::ParseFeedback(uint32_t identifier, const uint8_t data[8])
      * 下标与 ID 不成线性关系，必须匹配。
      * 只有 3 个电机，循环开销可忽略，换来的是"改 ID 不用改代码"。
      */
-    for (uint32_t i = 0; i < Dji6020Cfg::MOTOR_MAX; ++i)
+    for (uint32_t i = 0; i < motorCount_; ++i)
     {
-        Dji6020Motor &motor = Dji6020Motors[i];
+        Dji6020Motor &motor = *motors_[i];
 
         if (motor.motorId_ != motorId)
         {
@@ -183,7 +173,7 @@ void Dji6020Bus::ParseFeedback(uint32_t identifier, const uint8_t data[8])
         rx.angleDeg   = static_cast<float>(rx.encoder) * Dji6020Cfg::DEG_PER_TICK;
 
         /* 累计多圈角度 */
-        motor.updateAngle();
+        motor.UpdateAngle();
 
         /* --- 在线状态 --- */
         rx.lastRxTick = HAL_GetTick();
@@ -203,22 +193,19 @@ void Dji6020Bus::ParseFeedback(uint32_t identifier, const uint8_t data[8])
  *         刻"（HAL_GetTick 很小）而非"从未收到"，所以额外用 lastRxTick==0
  *         判断"从未收到过"，避免刚上电就误报掉线。
  */
-void Dji6020Bus::UpdateOnlineState(void)
+void Dji6020Bus::UpdateOnlineState()
 {
     const uint32_t now = HAL_GetTick();
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
 
-    for (uint32_t i = 0; i < Dji6020Cfg::MOTOR_MAX; ++i)
+    for (uint32_t i = 0; i < motorCount_; ++i)
     {
-        Dji6020Motor &motor = Dji6020Motors[i];
+        Dji6020Motor &motor = *motors_[i];
 
-        if (motor.motorId_ == 0)
+        if (motor.motorId_ == 0 || motor.rxData_.lastRxTick == 0)
         {
             continue;
-        }
-
-        if (motor.rxData_.lastRxTick == 0)
-        {
-            continue;   // 还没收到过任何帧，保持初始 offline
         }
 
         if ((now - motor.rxData_.lastRxTick) > Dji6020Cfg::ONLINE_TIMEOUT_MS)
@@ -226,11 +213,42 @@ void Dji6020Bus::UpdateOnlineState(void)
             motor.rxData_.online = false;
         }
     }
+
+    __set_PRIMASK(primask);
 }
 
-/* ============================================================
- *  Dji6020Motor 实现
- * ============================================================ */
+Dji6020RxData Dji6020Motor::GetRxData() const
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    Dji6020RxData copy = rxData_;
+    __set_PRIMASK(primask);
+    return copy;
+}
+
+
+void Dji6020Bus::Register(Dji6020Motor* motor)
+{
+    if (motor == nullptr)
+    {
+        return;
+    }
+
+    for (uint32_t i = 0; i < motorCount_; ++i)
+    {
+        if (motors_[i] == motor)
+        {
+            return;
+        }
+    }
+
+    if (motorCount_ >= RobotConfig::WHEEL_COUNT)
+    {
+        return;
+    }
+
+    motors_[motorCount_++] = motor;
+}
 
 Dji6020Motor::Dji6020Motor()
     : motorId_(0)
@@ -263,12 +281,13 @@ void Dji6020Motor::Init(uint32_t motorId)
 
     /* 第一个电机注册时标记协议层已就绪 */
     Dji6020Bus::hasMotor_ = true;
+    Dji6020Bus::Register(this);
 }
 
 /**
  * @brief  设置目标电流 (A)，自动限幅到 ±20 A
  */
-void Dji6020Motor::setCurrent(float currentA)
+void Dji6020Motor::SetCurrent(float currentA)
 {
     if (slotIndex_ < 0)
     {
@@ -293,7 +312,7 @@ void Dji6020Motor::setCurrent(float currentA)
 /**
  * @brief  按原始值设置（调试用）
  */
-void Dji6020Motor::setCurrentRaw(int16_t raw)
+void Dji6020Motor::SetCurrentRaw(int16_t raw)
 {
     if (slotIndex_ < 0)
     {
@@ -306,7 +325,7 @@ void Dji6020Motor::setCurrentRaw(int16_t raw)
 /**
  * @brief  零力矩停止
  */
-void Dji6020Motor::stop(void)
+void Dji6020Motor::Stop()
 {
     if (slotIndex_ < 0)
     {
@@ -325,7 +344,7 @@ void Dji6020Motor::stop(void)
  *    增量 > 4096  → 实际是反向跨零（少算了一圈）
  *    增量 < -4096 → 实际是正向跨零（多算了一圈）
  */
-void Dji6020Motor::updateAngle(void)
+void Dji6020Motor::UpdateAngle()
 {
     Dji6020RxData &rx = rxData_;
 

@@ -84,6 +84,8 @@ virtualFolder:
       files:
         - path: ../Task/Chassis_Task.cpp
         - path: ../Task/Chassis_Task.h
+        - path: ../Task/Chassis.cpp
+        - path: ../Task/Chassis.h
       folders: []
     - name: bsp
       files:
@@ -91,6 +93,8 @@ virtualFolder:
         - path: ../bsp/bsp_can.h
         - path: ../bsp/bsp_dwt.cpp
         - path: ../bsp/bsp_dwt.h
+        - path: ../bsp/bsp_uart.cpp
+        - path: ../bsp/bsp_uart.h
       folders: []
     - name: vesc_can
       files:
@@ -111,6 +115,10 @@ virtualFolder:
       files:
         - path: ../kinematics/chassis_kinematics.cpp
         - path: ../kinematics/chassis_kinematics.h
+      folders: []
+    - name: math
+      files:
+        - path: ../math/math_utils.h
       folders: []
     - name: pid
       files:
@@ -153,6 +161,7 @@ targets:
         - ../kinematics
         - ../pid
         - ../robot_config
+        - ../math
         - ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F
         - .cmsis/include
         - RTE/_My26R1_STM32H723VGT6

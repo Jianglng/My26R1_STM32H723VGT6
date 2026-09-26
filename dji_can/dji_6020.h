@@ -1,73 +1,49 @@
 /**
- *  【DJI 6020 CAN 协议层说明】
- * ============================================================
- *  本文件只负责 6020 的协议部分：报文格式、电流标定、反馈解析。
- *  CAN 硬件操作（滤波器配置、外设启动、中断注册、发送帧对象）
- *  全部在 bsp/bsp_can.cpp 中完成，与 VESC(FDCAN1) 保持同一结构。
+ * @brief DJI 6020 CAN 协议层。
  *
- *  ── 与 VESC 的关键差异 ──
- *    1. 6020 是标准帧（11 位 ID），VESC 是扩展帧（29 位）
- *    2. 6020 一帧控制 4 个电机，VESC 一帧只控制 1 个
- *    3. 6020 用大端序 int16，VESC 用大端序 int32
+ * 只负责报文格式、电流标定和反馈解析。滤波器、启动和发送在 bsp_can。
+ * 6020 是 11 位标准帧，一帧控制 4 个电机，负载用大端 int16。
+ * VESC 是 29 位扩展帧，一帧一个电机，有效数据用大端 int32。
  *
- *  ── 接收（电机 → 主控，反馈帧）──
- *    每个电机有独立反馈 ID：
- *      0x205 = 1 号    0x206 = 2 号    0x207 = 3 号    0x208 = 4 号
- *    数据布局（8 字节，大端序）：
- *    ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐
- *    │Byte0 │Byte1 │Byte2 │Byte3 │Byte4 │Byte5 │Byte6 │Byte7 │
- *    │ 机械角度 0~8191  │ 转速 (rpm)      │ 转矩电流        │温度  │
- *    │   uint16 BE      │ int16 BE        │ int16 BE        │uint8 │
- *    └──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘
- *
- *  ── 发送（主控 → 电机，控制帧）──
- *    四个电机共用一帧，靠 ID 区分组别：
- *      0x1FF → 控制 1~4 号（反馈 0x205~0x208）
- *      0x2FF → 控制 5~8 号（反馈 0x209~0x20C）
- *    数据布局：4 个 int16 大端序，依次对应组内第 1~4 个电机
- *
- *  ── 电流标定 ──
- *    协议原始值 ±25000 对应 ±20 A（电调内部"转矩电流"，非电池总线电流）
- *    换算：raw = current_A × 1250        （25000 / 20 = 1250）
- * ============================================================
+ * 反馈 ID 从 0x205 起，电机 n 为 0x205 + n - 1。
+ * 8 字节依次是机械角度 uint16、转速 int16、转矩电流 int16、温度 uint8。
+ * 控制 ID：0x1FF 管 1~4 号，0x2FF 管 5~8 号。
+ * 每帧 4 个 int16 大端，依次是组内第 1~4 个电机。
+ * 原始值 ±25000 对应转矩电流 ±20 A，raw = A × 1250。这不是电池电流。
  */
-
 #pragma once
 
 #include "main.h"
+#include "robot_config.h"
 
-/* ============================================================
- *  协议常量
- * ============================================================ */
+/* 协议常量 */
 namespace Dji6020Cfg
 {
-    /* --- CAN 标识符 --- */
-    const uint32_t CTRL_ID_GROUP1   = 0x1FF;   ///< 控制 1~4 号电机
-    const uint32_t CTRL_ID_GROUP2   = 0x2FF;   ///< 控制 5~8 号电机
-    const uint32_t FEEDBACK_ID_BASE = 0x205;   ///< 反馈 ID 基数，电机 n 为 BASE + n - 1
+    /* CAN 标识符 */
+    constexpr uint32_t CTRL_ID_GROUP1   = 0x1FF;   ///< 控制 1~4 号电机
+    constexpr uint32_t CTRL_ID_GROUP2   = 0x2FF;   ///< 控制 5~8 号电机
+    constexpr uint32_t FEEDBACK_ID_BASE = 0x205;   ///< 反馈 ID 基数，电机 n 为 BASE + n - 1
 
-    const uint32_t MOTOR_ID_MIN     = 1;       ///< 可配置的电机 ID 范围
-    const uint32_t MOTOR_ID_MAX     = 8;
+    constexpr uint32_t MOTOR_ID_MIN     = 1;       ///< 可配置的电机 ID 范围
+    constexpr uint32_t MOTOR_ID_MAX     = 8;
 
-    /* --- 电流标定 --- */
-    const int32_t  RAW_MAX          = 25000;   ///< 协议原始值上限，对应 +20 A
-    const float    CURRENT_MAX_A    = 20.0f;   ///< 满量程电流 (A)
-    const float    RAW_PER_AMP      = 1250.0f; ///< 每安培对应原始值 = 25000 / 20
+    /* 电流标定 */
+    constexpr int32_t  RAW_MAX          = 25000;   ///< 协议原始值上限，对应 +20 A
+    constexpr float    CURRENT_MAX_A    = 20.0f;   ///< 满量程电流 (A)
+    constexpr float    RAW_PER_AMP      = 1250.0f; ///< 每安培对应原始值 = 25000 / 20
 
-    /* --- 反馈解析 --- */
-    const float    ENCODER_MAX      = 8192.0f; ///< 机械角度分辨率
-    const float    DEG_PER_TICK     = 360.0f / ENCODER_MAX;
+    /* 反馈解析 */
+    constexpr float    ENCODER_MAX      = 8192.0f; ///< 机械角度分辨率
+    constexpr float    DEG_PER_TICK     = 360.0f / ENCODER_MAX;
 
-    /* --- 本工程挂载数量与超时 --- */
-    const uint32_t MOTOR_MAX        = 3;       ///< 实际挂载的 6020 数量
-    const uint32_t ONLINE_TIMEOUT_MS = 100;    ///< 超时未收到反馈判定掉线
+    /* 在线判定 */
+    constexpr uint32_t ONLINE_TIMEOUT_MS = 100;    ///< 超时未收到反馈判定掉线
 }
 
-/* ============================================================
- *  单个电机的反馈数据（由 CAN 中断解析后填充）
- *
- *  读取方拿到的只是普通数值字段，中断里整体写入不会撕裂。
- * ============================================================ */
+/**
+ * @brief 单个 6020 的反馈。中断里按字段写入。
+ * @note 不要直接读正在被改的这份数据。任务侧用 GetRxData()，那里会关中断再拷贝。
+ */
 struct Dji6020RxData
 {
     int16_t  encoder;        ///< 机械角度原始值 0~8191
@@ -95,41 +71,29 @@ struct Dji6020RxData
     {}
 };
 
-/* ============================================================
- *  Dji6020Bus —— 协议级总线操作（静态类）
+/**
+ * @brief 6020 总线。一帧要同时带 4 个电机的电流，所以由总线打包发送。
  *
- *  【为什么发送在总线级而不是电机级】
- *  6020 的控制帧是"一帧控 4 个电机"的广播帧，四个电流值必须同时
- *  出现在同一帧的 8 字节里。单个电机对象无法完成发送 —— 它不知道
- *  其他电机的电流。所以：各电机写自己的槽，总线统一打包发送。
- *
- *  【调用时序】
- *  ① bsp 层：  BSP_CAN::Init()        —— 配滤波器、启动 FDCAN3（在 bsp_can.cpp）
- *  ② 控制：    Dji6020Bus::Control()  —— 周期任务中调用，打包并下发
- *  ③ 接收：    Dji6020Bus::ParseFeedback()—— 由 bsp_can 取帧后转发进来
- * ============================================================ */
+ * 各电机只写自己的电流槽。BspCan::Init() 启动 FDCAN3，
+ * 周期任务调用 Control()，bsp_can 把收到的帧交给 ParseFeedback()。
+ */
+class Dji6020Motor;
+
 class Dji6020Bus
 {
 public:
-    /* --------------------------------------------------------
-     *  把所有电机目标电流打包成控制帧并通过 BSP_CAN 下发
-     *  应在周期任务中按固定频率调用（建议 1 kHz，与反馈帧率对齐）
-     * -------------------------------------------------------- */
-    static void Control(void);
+    /** @brief 打包已注册电机的电流并发送。建议 1 kHz，与反馈对齐。 */
+    static void Control();
 
-    /* --------------------------------------------------------
-     *  协议解析入口。由 bsp_can 取出报文后调用，本层不做任何 HAL 操作。
-     *
-     *  @param identifier  11 位标准帧 ID
-     *  @param data        8 字节负载
-     * -------------------------------------------------------- */
+    /**
+     * @brief 解析一帧反馈。由 bsp_can 取帧后调用，这里不做 HAL 操作。
+     * @param identifier 11 位标准帧 ID。
+     * @param data 8 字节负载。
+     */
     static void ParseFeedback(uint32_t identifier, const uint8_t data[8]);
 
-    /* --------------------------------------------------------
-     *  超时判定：更新各电机在线状态
-     *  （Control() 内已自动调用，此处单独暴露便于调试）
-     * -------------------------------------------------------- */
-    static void UpdateOnlineState(void);
+    /** @brief 按 ONLINE_TIMEOUT_MS 没收到反馈则标为离线。Control() 里会调用。 */
+    static void UpdateOnlineState();
 
 private:
     /* 各电机在本帧中的电流槽 */
@@ -141,60 +105,46 @@ private:
 
     static ControlSlot ctrlSlot_[Dji6020Cfg::MOTOR_ID_MAX];
     static bool        hasMotor_;   ///< 是否已有电机注册（决定 Control() 是否发包）
+    static Dji6020Motor* motors_[RobotConfig::WHEEL_COUNT];
+    static uint32_t motorCount_;
 
-    /* 仅供 Dji6020Motor 访问控制槽 */
+    static void Register(Dji6020Motor* motor);
+
+    /* 电机通过友元调用 Register()，写入自己的电流槽。 */
     friend class Dji6020Motor;
 };
 
-/* ============================================================
- *  Dji6020Motor —— 单个 6020 电机对象
- *
- *  【使用方法】
- *  ① 绑定 ID（数组下标按机械位置排，与 CAN ID 顺序无关）：
- *       Dji6020Motors[0].Init(1);   // 前轮 → 反馈 0x205
- *       Dji6020Motors[1].Init(4);   // 左轮 → 反馈 0x208
- *       Dji6020Motors[2].Init(3);   // 右轮 → 反馈 0x207
- *  ② 下发电流：
- *       Dji6020Motors[0].setCurrent(3.0f);   // 3 A
- *  ③ 读取反馈：
- *       float rpm = Dji6020Motors[0].getRxData().speedRpm;
- *  ④ 周期下发：
- *       Dji6020Bus::Control();
- * ============================================================ */
+/**
+ * @brief 单个 6020。电机 ID 按电调配置，数组下标按机械位置，两者不必相同。
+ */
 class Dji6020Motor
 {
 public:
     Dji6020Motor();
 
-    /* --------------------------------------------------------
-     *  绑定电机 ID（1~8），必须与电调实际配置一致
-     *  1~4 由 0x1FF 控制，5~8 由 0x2FF 控制
-     *
-     *  ID 超范围会被拒绝并保持未初始化 —— 配错 ID 会导致电机
-     *  完全不响应且没有任何报错，在初始化阶段拒绝能让问题早暴露。
-     * -------------------------------------------------------- */
+    /**
+     * @brief 绑定电机 ID，范围 1~8。1~4 号走 0x1FF，5~8 号走 0x2FF。
+     * @note 超出范围会拒绝初始化。ID 配错时电机不响应，也不会另外报错。
+     */
     void Init(uint32_t motorId);
 
-    /* --------------------------------------------------------
-     *  设置目标转矩电流 (A)，正=正转、负=反转
-     *  超出 ±20 A 自动限幅
-     *
-     *  只更新目标值，实际发送由 Dji6020Bus::Control() 完成 ——
-     *  这样多个电机的电流才能被打进同一帧。
-     * -------------------------------------------------------- */
-    void setCurrent(float currentA);
+    /**
+     * @brief 设置目标转矩电流，单位 A。超出 ±20 A 会限幅。
+     * @note 只写入电流槽，发送要等 Dji6020Bus::Control()。
+     */
+    void SetCurrent(float currentA);
 
-    /* 按原始值设置（调试用，±25000 量程） */
-    void setCurrentRaw(int16_t raw);
+    /** @brief 按协议原始值设置电流，量程 ±25000。 */
+    void SetCurrentRaw(int16_t raw);
 
-    /* 停止输出：目标电流置 0（零力矩，非刹车锁死） */
-    void stop(void);
+    /** @brief 目标电流置 0。这是零力矩，不是刹车锁死。 */
+    void Stop();
 
-    /* 只读反馈数据 */
-    const Dji6020RxData& getRxData(void) const { return rxData_; }
+    /** @brief 关中断后返回反馈拷贝。 */
+    Dji6020RxData GetRxData() const;
 
-    /* 当前电机 ID（0 表示尚未初始化） */
-    uint32_t getMotorId(void) const { return motorId_; }
+    /** @brief 电机 ID。0 表示还没有 Init()。 */
+    uint32_t GetMotorId() const { return motorId_; }
 
 private:
     uint32_t     motorId_;    ///< 电机标号 1~8，0 表示未初始化
@@ -202,19 +152,7 @@ private:
     Dji6020RxData rxData_;    ///< 反馈数据
 
     /* 编码器增量法累计多圈角度 */
-    void updateAngle(void);
+    void UpdateAngle();
 
     friend class Dji6020Bus;
 };
-
-/* ============================================================
- *  全局电机数组（下标 0~2 对应三路 6020）
- *  使用前必须各自调用 Init() 绑定 CAN ID。
- *
- *  下标由机械位置决定，与 CAN ID 顺序无关：
- *      [0] 前轮 → 1 号（反馈 0x205）
- *      [1] 左轮 → 4 号（反馈 0x208）
- *      [2] 右轮 → 3 号（反馈 0x207）
- *  反馈分发按 ID 匹配查找，所以无论按什么顺序 init 都能正确对上。
- * ============================================================ */
-extern Dji6020Motor Dji6020Motors[Dji6020Cfg::MOTOR_MAX];

@@ -38,31 +38,21 @@ public:
     /**
      * @brief 在底盘任务中周期调用：取出 DMA 新字节并解码，超时则标记离线。
      */
-    void update();
+    void Update();
 
     /** @brief 返回当前反馈的只读引用。 */
-    const ChaoheImuState &state() const
+    const ChaoheImuState &State() const
     {
         return state_;
     }
 
-    /**
-     * @brief UART 空闲接收回调。解码在 update() 中完成，这里无需处理数据。
-     */
-    void onRxEvent(UART_HandleTypeDef *uart, uint16_t size);
-
-    /**
-     * @brief 串口错误回调：清除溢出、丢掉半帧并重新启动 DMA。
-     */
-    void onError(UART_HandleTypeDef *uart);
-
 private:
-    HAL_StatusTypeDef startReceive();
-    void drainRx();
-    void applyHi91(const hi91_t &frame);
+    static void HandleError(void *context, UART_HandleTypeDef *uart);
+    void DrainRx();
+    void ApplyHi91(const hi91_t &frame);
 
-    static const uint16_t RX_BUF_NUM = 256U;
-    static const uint32_t ONLINE_TIMEOUT_MS = 100U;
+    static constexpr uint16_t RX_BUF_NUM = 256U;
+    static constexpr uint32_t ONLINE_TIMEOUT_MS = 100U;
 
     UART_HandleTypeDef *uart_ = nullptr;
     uint8_t rxBuf_[RX_BUF_NUM] = {0};
@@ -70,5 +60,3 @@ private:
     hipnuc_raw_t decoder_ = {};
     ChaoheImuState state_ = {};
 };
-
-extern ChaoheImu g_chaoheImu;

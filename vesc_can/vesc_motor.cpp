@@ -1,9 +1,9 @@
 #include "vesc_motor.h"
 #include "bsp_can.h"
 #include "fdcan.h"
-#include "gpio.h"
 
-VescMotor VescMotors[3];
+VescMotor* VescMotor::registry_[RobotConfig::WHEEL_COUNT] = {};
+uint32_t VescMotor::registryCount_ = 0;
 
 VescMotor::VescMotor()
     : hfdcan_(nullptr)
@@ -12,13 +12,33 @@ VescMotor::VescMotor()
 {
 }
 
+
+void VescMotor::Register()
+{
+    for (uint32_t i = 0; i < registryCount_; ++i)
+    {
+        if (registry_[i] == this)
+        {
+            return;
+        }
+    }
+
+    if (registryCount_ >= RobotConfig::WHEEL_COUNT)
+    {
+        return;
+    }
+
+    registry_[registryCount_++] = this;
+}
+
 void VescMotor::Init(FDCAN_HandleTypeDef *hfdcan, uint16_t nodeId)
 {
     hfdcan_ = hfdcan;
     nodeId_ = nodeId;
+    Register();
 }
 
-void VescMotor::packInt32BigEndian(int32_t val, uint8_t *data)
+void VescMotor::PackInt32BigEndian(int32_t val, uint8_t *data)
 {
     data[0] = static_cast<uint8_t>((val >> 24) & 0xFF);
     data[1] = static_cast<uint8_t>((val >> 16) & 0xFF);
@@ -26,86 +46,86 @@ void VescMotor::packInt32BigEndian(int32_t val, uint8_t *data)
     data[3] = static_cast<uint8_t>(val & 0xFF);
 }
 
-void VescMotor::sendFrame(CanPacketID cmd, const uint8_t data[8])
+void VescMotor::SendFrame(CanPacketID cmd, const uint8_t data[8])
 {
-    FDCAN_TxFrame_TypeDef *txFrame = nullptr;
+    FdcanTxFrame *txFrame = nullptr;
     if (hfdcan_ == &hfdcan1)
     {
-        txFrame = &BSP_CAN::FDCAN1_TxFrame;
+        txFrame = &BspCan::fdcan1TxFrame_;
     }
     else
     {
         return;
     }
 
-    txFrame->Header.IdType = FDCAN_EXTENDED_ID;
-    txFrame->Header.TxFrameType = FDCAN_DATA_FRAME;
-    txFrame->Header.DataLength = FDCAN_DLC_BYTES_8;
-    txFrame->Header.Identifier =
+    txFrame->header.IdType = FDCAN_EXTENDED_ID;
+    txFrame->header.TxFrameType = FDCAN_DATA_FRAME;
+    txFrame->header.DataLength = FDCAN_DLC_BYTES_8;
+    txFrame->header.Identifier =
         (static_cast<uint32_t>(nodeId_) & 0xFF) |
         (static_cast<uint32_t>(cmd) << 8);
 
-    txFrame->Header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    txFrame->Header.BitRateSwitch = FDCAN_BRS_OFF;
-    txFrame->Header.FDFormat = FDCAN_CLASSIC_CAN;
-    txFrame->Header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-    txFrame->Header.MessageMarker = 0;
+    txFrame->header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    txFrame->header.BitRateSwitch = FDCAN_BRS_OFF;
+    txFrame->header.FDFormat = FDCAN_CLASSIC_CAN;
+    txFrame->header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    txFrame->header.MessageMarker = 0;
 
     for (uint32_t i = 0; i < 8; ++i)
     {
-        txFrame->Data[i] = data[i];
+        txFrame->data[i] = data[i];
     }
 
-    BSP_CAN::AddMessageToTxFifoQ(txFrame);
+    BspCan::AddMessageToTxFifoQ(txFrame);
 }
 
-void VescMotor::setCurrent(int32_t current_mA)
+void VescMotor::SetCurrent(int32_t current_mA)
 {
     uint8_t data[8] = {0};
-    packInt32BigEndian(current_mA, data);
-    sendFrame(CanPacketID::SET_CURRENT, data);
+    PackInt32BigEndian(current_mA, data);
+    SendFrame(CanPacketID::SET_CURRENT, data);
 }
 
-void VescMotor::setRpm(int32_t rpm)
+void VescMotor::SetRpm(int32_t rpm)
 {
     uint8_t data[8] = {0};
-    packInt32BigEndian(rpm * POLE_PAIRS, data);
-    sendFrame(CanPacketID::SET_RPM, data);
+    PackInt32BigEndian(rpm * RobotConfig::VESC_POLE_PAIRS, data);
+    SendFrame(CanPacketID::SET_RPM, data);
 }
 
-void VescMotor::setPwm(double pwm)
+void VescMotor::SetPwm(double pwm)
 {
     uint8_t data[8] = {0};
-    packInt32BigEndian(static_cast<int32_t>(pwm * 100000.0), data);
-    sendFrame(CanPacketID::SET_DUTY, data);
+    PackInt32BigEndian(static_cast<int32_t>(pwm * 100000.0), data);
+    SendFrame(CanPacketID::SET_DUTY, data);
 }
 
-void VescMotor::setPos(int32_t pos)
+void VescMotor::SetPos(int32_t pos)
 {
     uint8_t data[8] = {0};
-    packInt32BigEndian(pos, data);
-    sendFrame(CanPacketID::SET_POS, data);
+    PackInt32BigEndian(pos, data);
+    SendFrame(CanPacketID::SET_POS, data);
 }
 
-void VescMotor::setBrakeCurrent(int32_t current_mA)
+void VescMotor::SetBrakeCurrent(int32_t current_mA)
 {
     uint8_t data[8] = {0};
-    packInt32BigEndian(current_mA, data);
-    sendFrame(CanPacketID::SET_CURRENT_BRAKE, data);
+    PackInt32BigEndian(current_mA, data);
+    SendFrame(CanPacketID::SET_CURRENT_BRAKE, data);
 }
 
-void VescMotor::setHandbrakeCurrent(int32_t current_mA)
+void VescMotor::SetHandbrakeCurrent(int32_t current_mA)
 {
     uint8_t data[8] = {0};
-    packInt32BigEndian(current_mA, data);
-    sendFrame(CanPacketID::SET_CURRENT_HANDBRAKE, data);
+    PackInt32BigEndian(current_mA, data);
+    SendFrame(CanPacketID::SET_CURRENT_HANDBRAKE, data);
 }
 
-void VescMotor::setHandbrakeCurrentRel(float relative)
+void VescMotor::SetHandbrakeCurrentRel(float relative)
 {
     uint8_t data[8] = {0};
-    packInt32BigEndian(static_cast<int32_t>(relative * 100000.0f), data);
-    sendFrame(CanPacketID::SET_CURRENT_HANDBRAKE_REL, data);
+    PackInt32BigEndian(static_cast<int32_t>(relative * 100000.0f), data);
+    SendFrame(CanPacketID::SET_CURRENT_HANDBRAKE_REL, data);
 }
 
 void VescMotor::ParseCanFeedback(uint32_t identifier, const uint8_t data[8])
@@ -118,23 +138,24 @@ void VescMotor::ParseCanFeedback(uint32_t identifier, const uint8_t data[8])
     const uint8_t rxNodeId = static_cast<uint8_t>(identifier & 0xFF);
     const CanPacketID cmd = static_cast<CanPacketID>((identifier >> 8) & 0xFF);
 
-    for (auto &motor : VescMotors)
+    for (uint32_t i = 0; i < registryCount_; ++i)
     {
-        if (motor.hfdcan_ == nullptr)
+        VescMotor* motor = registry_[i];
+        if (motor == nullptr || motor->hfdcan_ == nullptr)
         {
             continue;
         }
-        if (static_cast<uint8_t>(motor.nodeId_) != rxNodeId)
+        if (static_cast<uint8_t>(motor->nodeId_) != rxNodeId)
         {
             continue;
         }
 
-        motor.parseStatusPayload(cmd, data);
+        motor->ParseStatusPayload(cmd, data);
         return;
     }
 }
 
-void VescMotor::parseStatusPayload(CanPacketID cmd, const uint8_t data[8])
+void VescMotor::ParseStatusPayload(CanPacketID cmd, const uint8_t data[8])
 {
     switch (cmd)
     {
@@ -147,7 +168,7 @@ void VescMotor::parseStatusPayload(CanPacketID cmd, const uint8_t data[8])
                 (static_cast<int32_t>(data[2]) << 8) |
                 static_cast<int32_t>(data[3]);
             rxData_.eRpm = static_cast<float>(erpm);
-            rxData_.rpm = rxData_.eRpm / static_cast<float>(POLE_PAIRS);
+            rxData_.rpm = rxData_.eRpm / static_cast<float>(RobotConfig::VESC_POLE_PAIRS);
 
             rxData_.totalCurrent = static_cast<float>(
                 static_cast<int16_t>((static_cast<uint16_t>(data[4]) << 8) |
@@ -156,7 +177,6 @@ void VescMotor::parseStatusPayload(CanPacketID cmd, const uint8_t data[8])
             rxData_.duty = static_cast<float>(
                 static_cast<int16_t>((static_cast<uint16_t>(data[6]) << 8) |
                                      static_cast<uint16_t>(data[7]))) / 1000.0f;
-            rxData_.dutyCycle = rxData_.duty;
             break;
         }
 
@@ -197,4 +217,13 @@ void VescMotor::parseStatusPayload(CanPacketID cmd, const uint8_t data[8])
         default:
             break;
     }
+}
+
+VescRxData VescMotor::GetRxData() const
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    VescRxData copy = rxData_;
+    __set_PRIMASK(primask);
+    return copy;
 }
