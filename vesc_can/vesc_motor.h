@@ -57,11 +57,14 @@ struct VescRxData
     int   turnCount;        ///< 过零圈数。
     float totalPosition;    ///< turnCount×360 + pidPositionNow。
     bool  hasPosition;      ///< 是否已收到过 STATUS_4。
+    bool  speedOnline;      ///< STATUS 转速反馈在超时时间内有效。
+    uint32_t lastSpeedTick; ///< 最近一帧 STATUS 的接收时刻 (ms)。
 
     VescRxData()
         : eRpm(0.f), rpm(0.f), duty(0.f), totalCurrent(0.f)
         , pidPositionNow(0.f), pidPositionLast(0.f)
         , turnCount(0), totalPosition(0.f), hasPosition(false)
+        , speedOnline(false), lastSpeedTick(0)
     {}
 };
 
@@ -104,6 +107,8 @@ public:
     FDCAN_HandleTypeDef *GetFdcan() const { return hfdcan_; }
 
 private:
+    static constexpr uint32_t SPEED_ONLINE_TIMEOUT_MS = 100U;
+
     FDCAN_HandleTypeDef *hfdcan_;
     uint16_t nodeId_;
     VescRxData rxData_;

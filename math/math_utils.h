@@ -29,6 +29,22 @@ namespace MathUtils
         return value;
     }
 
+    /** @brief 把周期值收到 [0, range)。 */
+    inline float WrapEncoder(float value, float range)
+    {
+        if (range <= 0.0f)
+        {
+            return value;
+        }
+
+        value = fmodf(value, range);
+        if (value < 0.0f)
+        {
+            value += range;
+        }
+        return value;
+    }
+
     /** @brief 把误差收到 (-range/2, range/2]，取较短的一侧。 */
     inline float WrapEncoderError(float err, float range)
     {

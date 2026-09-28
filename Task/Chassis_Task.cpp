@@ -9,6 +9,29 @@
 
 namespace
 {
+    enum class ChassisMode : uint8_t
+    {
+        Stop,
+        Manual,
+        Auto
+    };
+
+    ChassisMode SelectMode(const RemoteState &remote)
+    {
+        if (!remote.online)
+        {
+            return ChassisMode::Stop;
+        }
+
+        switch (remote.leftSwitch)
+        {
+            case 1U: return ChassisMode::Auto;   // 上档
+            case 3U: return ChassisMode::Manual; // 中档
+            case 2U: return ChassisMode::Stop;   // 下档
+            default: return ChassisMode::Stop;
+        }
+    }
+
     ChassisBodyVelocity MapRemote(const RemoteState &remote)
     {
         ChassisBodyVelocity vel = {};
@@ -45,13 +68,21 @@ extern "C" void StartChassisTask(void *argument)
     for (;;)
     {
         const RemoteState state = remote.State();
-        if (!state.online)
+        switch (SelectMode(state))
         {
-            chassis.Stop();
-        }
-        else
-        {
-            chassis.SetVelocity(MapRemote(state));
+            case ChassisMode::Manual:
+                chassis.SetVelocity(MapRemote(state));
+                break;
+
+            case ChassisMode::Auto:
+                /* 自动目标速度尚未接入，保持停机。 */
+                chassis.Stop();
+                break;
+
+            case ChassisMode::Stop:
+            default:
+                chassis.Stop();
+                break;
         }
         chassis.Update();
         osDelay(1);

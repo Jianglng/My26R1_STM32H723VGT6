@@ -35,5 +35,6 @@ options:
             <virtual_root>/Middlewares/FreeRTOS/heap_4.c: ""
             <virtual_root>/Middlewares/FreeRTOS/port.c: ""
             <virtual_root>/Task/Chassis_Task.cpp: ""
+            <virtual_root>/Task/Chassis.cpp: ""
             <virtual_root>/bsp/bsp_can.cpp: ""
             <virtual_root>/vesc_can/vesc_motor.cpp: ""

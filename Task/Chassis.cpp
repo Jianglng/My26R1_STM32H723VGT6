@@ -39,11 +39,22 @@ void Chassis::Update()
 {
     Dji6020RxData steerFeedback[RobotConfig::WHEEL_COUNT];
     int16_t steerEncoder[RobotConfig::WHEEL_COUNT];
+    float wheelRpm[RobotConfig::WHEEL_COUNT];
+    measuredVelocityValid_ = true;
     for (uint32_t i = 0; i < RobotConfig::WHEEL_COUNT; ++i)
     {
         steerFeedback[i] = steerMotors_[i].GetRxData();
         steerEncoder[i] = steerFeedback[i].encoder;
+        const VescRxData wheelFeedback = wheelMotors_[i].GetRxData();
+        wheelRpm[i] = wheelFeedback.rpm;
+        if (!steerFeedback[i].online || !wheelFeedback.speedOnline)
+        {
+            measuredVelocityValid_ = false;
+        }
     }
+
+    measuredVelocity_ = measuredVelocityValid_ ? kinematics_.Forward(steerEncoder, wheelRpm)
+                                               : ChassisBodyVelocity{};
 
     if (!enabled_)
     {

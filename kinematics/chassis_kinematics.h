@@ -11,7 +11,7 @@
  * 轮序与 RobotConfig 的电机 ID 数组一致：[0] 前轮，[1] 左轮，[2] 右轮。
  * 轮数、零点和轮心坐标只在 RobotConfig 里，本层直接引用。
  *
- * 三轮按等边三角形布置，前轮在 +x 轴上。本层只做逆解，
+ * 三轮按等边三角形布置，前轮在 +x 轴上。本层只做正逆解，
  * 不读遥控器，不调用 PID，也不发送 CAN。
  * 车体速度低于停止阈值时，轮速为 0，舵向保持上一拍。
  */
@@ -44,6 +44,15 @@ public:
     ChassisWheelCommand Inverse(const ChassisBodyVelocity &vel,
                                 const int16_t encoder[RobotConfig::WHEEL_COUNT]);
 
+    /**
+     * @brief 由实际舵角和轮向机械转速估计车体速度。
+     * @param encoder 三路 6020 实际编码器，下标 0/1/2 对应前/左/右。
+     * @param wheelRpm 三路 VESC 反馈的有符号机械转速 (RPM)。
+     * @note 假定轮子沿舵向滚动且没有明显打滑；结果不包含场地位置。
+     */
+    ChassisBodyVelocity Forward(const int16_t encoder[RobotConfig::WHEEL_COUNT],
+                                const float wheelRpm[RobotConfig::WHEEL_COUNT]) const;
+
     const ChassisBodyVelocity &BodyVelocity() const
     {
         return bodyVelocity_;
@@ -55,9 +64,6 @@ public:
     }
 
 private:
-    /** @brief 把编码器收到 [0, ENCODER_MAX)。 */
-    static float WrapEncoder(float value);
-
     ChassisBodyVelocity bodyVelocity_;
     ChassisWheelCommand command_;
 };

@@ -162,13 +162,18 @@ void VescMotor::ParseStatusPayload(CanPacketID cmd, const uint8_t data[8])
         /* STATUS：int32 eRPM、int16 电流×10、int16 占空比×1000。 */
         case CanPacketID::STATUS:
         {
-            const int32_t erpm =
-                (static_cast<int32_t>(data[0]) << 24) |
-                (static_cast<int32_t>(data[1]) << 16) |
-                (static_cast<int32_t>(data[2]) << 8) |
-                static_cast<int32_t>(data[3]);
+            const uint32_t erpmRaw =
+                (static_cast<uint32_t>(data[0]) << 24) |
+                (static_cast<uint32_t>(data[1]) << 16) |
+                (static_cast<uint32_t>(data[2]) << 8) |
+                static_cast<uint32_t>(data[3]);
+            const int32_t erpm = (erpmRaw < 0x80000000U)
+                ? static_cast<int32_t>(erpmRaw)
+                : static_cast<int32_t>(static_cast<int64_t>(erpmRaw) - 0x100000000LL);
             rxData_.eRpm = static_cast<float>(erpm);
             rxData_.rpm = rxData_.eRpm / static_cast<float>(RobotConfig::VESC_POLE_PAIRS);
+            rxData_.speedOnline = true;
+            rxData_.lastSpeedTick = HAL_GetTick();
 
             rxData_.totalCurrent = static_cast<float>(
                 static_cast<int16_t>((static_cast<uint16_t>(data[4]) << 8) |
@@ -225,5 +230,7 @@ VescRxData VescMotor::GetRxData() const
     __disable_irq();
     VescRxData copy = rxData_;
     __set_PRIMASK(primask);
+    copy.speedOnline = copy.speedOnline &&
+                       ((HAL_GetTick() - copy.lastSpeedTick) <= SPEED_ONLINE_TIMEOUT_MS);
     return copy;
 }

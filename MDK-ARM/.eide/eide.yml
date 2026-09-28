@@ -111,6 +111,15 @@ virtualFolder:
         - path: ../remote/remote_input.cpp
         - path: ../remote/remote_input.h
       folders: []
+    - name: chaohe_imu
+      files:
+        - path: ../chaohe_imu/chaohe_imu.cpp
+        - path: ../chaohe_imu/chaohe_imu.h
+        - path: ../chaohe_imu/hipnuc_dec.c
+        - path: ../chaohe_imu/hipnuc_dec.h
+        - path: ../chaohe_imu/hipnuc_sample.c
+        - path: ../chaohe_imu/hipnuc_sample.h
+      folders: []
     - name: kinematics
       files:
         - path: ../kinematics/chassis_kinematics.cpp
@@ -158,6 +167,7 @@ targets:
         - ../Task
         - ../dji_can
         - ../remote
+        - ../chaohe_imu
         - ../kinematics
         - ../pid
         - ../robot_config

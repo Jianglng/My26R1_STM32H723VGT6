@@ -28,8 +28,12 @@ public:
     /** @brief 遥控器离线或急停。下一拍 Update() 清积分并输出 0。 */
     void Stop();
 
+    /** @brief 实际舵角和轮速正解出的车体速度；反馈无效时为零。 */
+    const ChassisBodyVelocity &MeasuredVelocity() const { return measuredVelocity_; }
+    bool HasMeasuredVelocity() const { return measuredVelocityValid_; }
+
     /**
-     * @brief 跑一拍：逆解、舵向串级、发轮速。
+     * @brief 跑一拍：读取反馈并正解速度，再逆解目标、控制舵向和轮速。
      * Stop() 之后只发零电流和零转速，不含延时。
      */
     void Update();
@@ -48,5 +52,7 @@ private:
     Dji6020Motor steerMotors_[RobotConfig::WHEEL_COUNT];
     VescMotor wheelMotors_[RobotConfig::WHEEL_COUNT];
     ChassisBodyVelocity bodyVelocity_ = {};
+    ChassisBodyVelocity measuredVelocity_ = {};
+    bool measuredVelocityValid_ = false;
     bool enabled_ = false;
 };
