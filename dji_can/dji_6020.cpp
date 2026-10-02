@@ -118,10 +118,6 @@ void Dji6020Bus::Control()
  * @brief  协议解析入口：把一帧反馈分发到对应电机
  * @param  identifier  11 位标准帧 ID
  * @param  data        8 字节负载
- *
- *  本层不判断"是不是 FDCAN3"——那是 bsp_can 的职责，
- *  进到这里的一定已经是 6020 总线的报文。
- *  按电机标号匹配查找，而不是用 ID 硬算下标。
  */
 void Dji6020Bus::ParseFeedback(uint32_t identifier, const uint8_t data[8])
 {

@@ -33,6 +33,14 @@ public:
     bool HasMeasuredVelocity() const { return measuredVelocityValid_; }
 
     /**
+     * @brief 复制一份仅供调试观察的电机反馈。
+     * @note 不参与控制；底层 getter 自己负责与 CAN 接收中断隔离。
+     */
+    void CopyFeedbackForDebug(
+        Dji6020RxData steerFeedback[RobotConfig::WHEEL_COUNT],
+        VescRxData wheelFeedback[RobotConfig::WHEEL_COUNT]) const;
+
+    /**
      * @brief 跑一拍：读取反馈并正解速度，再逆解目标、控制舵向和轮速。
      * Stop() 之后只发零电流和零转速，不含延时。
      */

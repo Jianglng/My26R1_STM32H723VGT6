@@ -70,6 +70,23 @@ void Chassis::Update()
     RunWheelRpm(command, steerFeedback);
 }
 
+void Chassis::CopyFeedbackForDebug(
+    Dji6020RxData steerFeedback[RobotConfig::WHEEL_COUNT],
+    VescRxData wheelFeedback[RobotConfig::WHEEL_COUNT]) const
+{
+    if (steerFeedback == nullptr || wheelFeedback == nullptr)
+    {
+        return;
+    }
+
+    for (uint32_t i = 0; i < RobotConfig::WHEEL_COUNT; ++i)
+    {
+        /* 两类 GetRxData() 都会在内部关中断后复制，调试层不直接碰内部状态。 */
+        steerFeedback[i] = steerMotors_[i].GetRxData();
+        wheelFeedback[i] = wheelMotors_[i].GetRxData();
+    }
+}
+
 void Chassis::StopMotors()
 {
     for (uint32_t i = 0; i < RobotConfig::WHEEL_COUNT; ++i)

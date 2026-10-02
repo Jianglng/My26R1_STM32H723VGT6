@@ -1,6 +1,8 @@
 #include "Chassis_Task.h"
 
 #include "Chassis.h"
+#include "Debug_Snapshot.h"
+#include "chaohe_imu.h"
 #include "cmsis_os.h"
 #include "math_utils.h"
 #include "remote_input.h"
@@ -61,10 +63,13 @@ extern "C" void StartChassisTask(void *argument)
 
     static Chassis chassis;
     static RemoteInput remote;
+    static ChaoheImu imu;
+    uint32_t lastDebugSnapshotTick = 0U;
 
     chassis.Init();
     remote.Init(&huart5);
-
+    imu.Init(&huart10);
+    
     for (;;)
     {
         const RemoteState state = remote.State();
@@ -85,6 +90,15 @@ extern "C" void StartChassisTask(void *argument)
                 break;
         }
         chassis.Update();
+        imu.Update();
+
+        /* 调试镜像不参与控制，低频更新以免给 1 ms 控制循环增加额外开销。 */
+        const uint32_t now = HAL_GetTick();
+        if ((now - lastDebugSnapshotTick) >= DebugSnapshot::UPDATE_PERIOD_MS)
+        {
+            DebugSnapshot::Update(state, chassis, imu.State());
+            lastDebugSnapshotTick = now;
+        }
         osDelay(1);
     }
 }

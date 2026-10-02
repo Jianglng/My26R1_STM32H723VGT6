@@ -86,6 +86,8 @@ virtualFolder:
         - path: ../Task/Chassis_Task.h
         - path: ../Task/Chassis.cpp
         - path: ../Task/Chassis.h
+        - path: ../Task/Debug_Snapshot.cpp
+        - path: ../Task/Debug_Snapshot.h
       folders: []
     - name: bsp
       files:
