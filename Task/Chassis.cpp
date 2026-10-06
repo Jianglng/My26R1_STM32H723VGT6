@@ -37,17 +37,22 @@ void Chassis::Stop()
 
 void Chassis::Update()
 {
-    Dji6020RxData steerFeedback[RobotConfig::WHEEL_COUNT];
+    UpdateFeedback();
+    UpdateControl();
+}
+
+void Chassis::UpdateFeedback()
+{
     int16_t steerEncoder[RobotConfig::WHEEL_COUNT];
     float wheelRpm[RobotConfig::WHEEL_COUNT];
     measuredVelocityValid_ = true;
     for (uint32_t i = 0; i < RobotConfig::WHEEL_COUNT; ++i)
     {
-        steerFeedback[i] = steerMotors_[i].GetRxData();
-        steerEncoder[i] = steerFeedback[i].encoder;
+        steerFeedback_[i] = steerMotors_[i].GetRxData();
+        steerEncoder[i] = steerFeedback_[i].encoder;
         const VescRxData wheelFeedback = wheelMotors_[i].GetRxData();
         wheelRpm[i] = wheelFeedback.rpm;
-        if (!steerFeedback[i].online || !wheelFeedback.speedOnline)
+        if (!steerFeedback_[i].online || !wheelFeedback.speedOnline)
         {
             measuredVelocityValid_ = false;
         }
@@ -55,7 +60,10 @@ void Chassis::Update()
 
     measuredVelocity_ = measuredVelocityValid_ ? kinematics_.Forward(steerEncoder, wheelRpm)
                                                : ChassisBodyVelocity{};
+}
 
+void Chassis::UpdateControl()
+{
     if (!enabled_)
     {
         StopMotors();
@@ -63,11 +71,16 @@ void Chassis::Update()
         return;
     }
 
+    int16_t steerEncoder[RobotConfig::WHEEL_COUNT];
+    for (uint32_t i = 0; i < RobotConfig::WHEEL_COUNT; ++i)
+    {
+        steerEncoder[i] = steerFeedback_[i].encoder;
+    }
     const ChassisWheelCommand command = kinematics_.Inverse(bodyVelocity_, steerEncoder);
 
-    RunSteerPid(command, steerFeedback);
+    RunSteerPid(command, steerFeedback_);
     Dji6020Bus::Control();
-    RunWheelRpm(command, steerFeedback);
+    RunWheelRpm(command, steerFeedback_);
 }
 
 void Chassis::CopyFeedbackForDebug(

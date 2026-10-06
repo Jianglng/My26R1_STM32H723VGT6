@@ -57,6 +57,29 @@ namespace RobotConfig
     constexpr float REMOTE_VY_SIGN = 1.0f;           ///< 左横轴右推 x 此符号 = vy。
     constexpr float REMOTE_WZ_SIGN = -1.0f;          ///< 右横轴右推 x 此符号 = wz。
 
+    /* ---- 单点自动运动，目标使用里程计坐标系 ---- */
+    constexpr float AUTO_TARGET_X = 0.0f;                  ///< 目标 x (m)，相对里程计原点。
+    constexpr float AUTO_TARGET_Y = 0.0f;                  ///< 目标 y (m)，相对里程计原点。
+    constexpr float AUTO_TARGET_YAW = 0.5236f;                ///< 指定目标航向 (rad)，逆时针为正。
+
+    constexpr float AUTO_MAX_VELOCITY = 0.2f;              ///< 梯形规划最大速度 (m/s)。
+    constexpr float AUTO_ACCELERATION = 0.2f;              ///< 加速度限制 (m/s^2)。
+    constexpr float AUTO_DECELERATION = 0.2f;              ///< 减速度限制 (m/s^2)。
+    constexpr float AUTO_ALONG_KP = 0.5f;                  ///< 沿路径修正增益 (1/s)，实车调试初值。
+    constexpr float AUTO_CROSS_KP = 0.5f;                  ///< 横向修正增益 (1/s)，实车调试初值。
+    constexpr float AUTO_YAW_KP = 0.5f;                    ///< 航向修正增益 (1/s)，实车调试初值。
+
+    constexpr float AUTO_MAX_CORRECTION_VELOCITY = 0.1f;   ///< 反馈合成速度上限 (m/s)。
+    constexpr float AUTO_MAX_OUTPUT_VELOCITY = 0.3f;       ///< 前馈和反馈合成速度上限 (m/s)。
+    constexpr float AUTO_MAX_YAW_VELOCITY = 0.2f;          ///< 最大角速度 (rad/s)。
+    constexpr float AUTO_YAW_ACCELERATION = 0.1f;          ///< 角速度变化率限制 (rad/s^2)。
+
+    constexpr float AUTO_POSITION_TOLERANCE = 0.01f;       ///< 到达位置阈值 (m)。
+    constexpr float AUTO_YAW_TOLERANCE = 0.01745f;         ///< 到达航向阈值 (rad)，约 1 度。
+    constexpr float AUTO_SPEED_TOLERANCE = 0.02f;          ///< 到达及启动时平移速度阈值 (m/s)。
+    constexpr float AUTO_YAW_SPEED_TOLERANCE = 0.02f;      ///< 到达及启动时角速度阈值 (rad/s)。
+    constexpr float AUTO_SETTLE_DURATION = 0.2f;           ///< 到达条件持续时间 (s)。
+
     /* ---- 舵向角度环 ---- */
     constexpr float STEER_ANGLE_KP = 4.0f;
     constexpr float STEER_ANGLE_KI = 0.0f;

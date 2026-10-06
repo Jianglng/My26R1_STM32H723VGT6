@@ -16,7 +16,7 @@
  * 车体速度低于停止阈值时，轮速为 0，舵向保持上一拍。
  */
 
-/** @brief 车体目标速度。 */
+/** @brief 车体速度 */
 struct ChassisBodyVelocity
 {
     float vx;   ///< 前进速度 (m/s)，向前为正

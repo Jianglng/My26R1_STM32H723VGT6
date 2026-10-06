@@ -2,6 +2,7 @@
 
 #include "Chassis.h"
 #include "Debug_Snapshot.h"
+#include "auto_mode_controller.h"
 #include "chaohe_imu.h"
 #include "chassis_odometry.h"
 #include "cmsis_os.h"
@@ -66,48 +67,70 @@ extern "C" void StartChassisTask(void *argument)
     static RemoteInput remote;
     static ChaoheImu imu;
     static ChassisOdometry odometry;
+    static AutoModeController autoMode;
+    ChassisMode lastMode = ChassisMode::Stop;
     uint32_t lastDebugSnapshotTick = 0U;
 
     chassis.Init();
     remote.Init(&huart5);
     imu.Init(&huart10);
     odometry.Reset();
-    uint32_t lastOdometryCycles = DWT->CYCCNT;
-    
+    uint32_t lastControlCycles = DWT->CYCCNT;
+
     for (;;)
     {
+        /* 本拍反馈先更新，再计算里程计和目标速度，最后执行电机控制。 */
+        imu.Update();
+        chassis.UpdateFeedback();
+        const ChaoheImuState &imuState = imu.State();
+        const ChassisBodyVelocity &measuredVelocity = chassis.MeasuredVelocity();
+        const float dt = chassis.Timer().GetDeltaT(&lastControlCycles);
+        const bool sensorValid = chassis.HasMeasuredVelocity() && imuState.online;
+        odometry.Update(measuredVelocity.vx, measuredVelocity.vy, imuState.yaw, dt, sensorValid);
+        const bool feedbackValid = sensorValid && odometry.Valid();
+
         const RemoteState state = remote.State();
-        switch (SelectMode(state))
+        const ChassisMode mode = SelectMode(state);
+        if (mode != lastMode)
+        {
+            /* 新切入自动档只启动一段运动；退出时取消，故障不自动重跑。 */
+            autoMode.Reset();
+            lastMode = mode;
+        }
+
+        switch (mode)
         {
             case ChassisMode::Manual:
                 chassis.SetVelocity(MapRemote(state));
                 break;
 
             case ChassisMode::Auto:
-                /* 自动目标速度尚未接入，保持停机。 */
-                chassis.Stop();
+            {
+                ChassisBodyVelocity autoVelocity = {};
+                if (autoMode.Update(odometry.Pose(), measuredVelocity, dt,
+                                    feedbackValid, autoVelocity))
+                {
+                    chassis.SetVelocity(autoVelocity);
+                }
+                else
+                {
+                    chassis.Stop();
+                }
                 break;
+            }
 
             case ChassisMode::Stop:
             default:
                 chassis.Stop();
                 break;
         }
-        chassis.Update();
-        imu.Update();
-        const ChaoheImuState &imuState = imu.State();
-        const ChassisBodyVelocity &measuredVelocity = chassis.MeasuredVelocity();
-
-        const float odometryDt = chassis.Timer().GetDeltaT(&lastOdometryCycles);
-
-        odometry.Update(measuredVelocity.vx, measuredVelocity.vy, imuState.yaw,
-                        odometryDt, chassis.HasMeasuredVelocity() && imuState.online);
+        chassis.UpdateControl();
 
         /* 调试镜像不参与控制，低频更新以免给 1 ms 控制循环增加额外开销。 */
         const uint32_t now = HAL_GetTick();
         if ((now - lastDebugSnapshotTick) >= DebugSnapshot::UPDATE_PERIOD_MS)
         {
-            DebugSnapshot::Update(state, chassis, imuState, odometry);
+            DebugSnapshot::Update(state, chassis, imuState, odometry, autoMode.Motion());
             lastDebugSnapshotTick = now;
         }
         osDelay(1);

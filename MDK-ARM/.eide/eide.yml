@@ -132,6 +132,18 @@ virtualFolder:
         - path: ../odometry/chassis_odometry.cpp
         - path: ../odometry/chassis_odometry.h
       folders: []
+    - name: trajectory
+      files:
+        - path: ../trajectory/trapezoidal_profile.cpp
+        - path: ../trajectory/trapezoidal_profile.h
+      folders: []
+    - name: control
+      files:
+        - path: ../control/auto_move.cpp
+        - path: ../control/auto_move.h
+        - path: ../control/auto_mode_controller.cpp
+        - path: ../control/auto_mode_controller.h
+      folders: []
     - name: math
       files:
         - path: ../math/math_utils.h
@@ -177,6 +189,8 @@ targets:
         - ../chaohe_imu
         - ../kinematics
         - ../odometry
+        - ../trajectory
+        - ../control
         - ../pid
         - ../robot_config
         - ../math

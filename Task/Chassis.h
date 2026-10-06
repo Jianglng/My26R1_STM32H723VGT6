@@ -49,6 +49,12 @@ public:
      */
     void Update();
 
+    /** @brief 读取一份电机反馈并正解实测速度，在里程计和自动控制之前调用。 */
+    void UpdateFeedback();
+
+    /** @brief 用本拍反馈执行电机控制，必须在 UpdateFeedback() 之后调用。 */
+    void UpdateControl();
+
 private:
     void StopMotors();
     void RunSteerPid(const ChassisWheelCommand &command,
@@ -62,6 +68,7 @@ private:
     Pid steerSpeedPid_[RobotConfig::WHEEL_COUNT];
     Dji6020Motor steerMotors_[RobotConfig::WHEEL_COUNT];
     VescMotor wheelMotors_[RobotConfig::WHEEL_COUNT];
+    Dji6020RxData steerFeedback_[RobotConfig::WHEEL_COUNT] = {};
     ChassisBodyVelocity bodyVelocity_ = {};
     ChassisBodyVelocity measuredVelocity_ = {};
     bool measuredVelocityValid_ = false;

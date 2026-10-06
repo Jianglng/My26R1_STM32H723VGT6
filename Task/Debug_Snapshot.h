@@ -9,6 +9,7 @@
  */
 
 #include "Chassis.h"
+#include "auto_move.h"
 #include "chaohe_imu.h"
 #include "chassis_odometry.h"
 #include "remote_input.h"
@@ -23,10 +24,11 @@ struct DebugSnapshotData
     bool measuredVelocityValid = false;
     ChassisPose2D odometryPose = {};
     bool odometryValid = false;
+    AutoMoveState autoMove = {};
     uint32_t updateTick = 0U;
 };
 
-/* Keil Watch 中展开这个变量即可查看三类数据。 */
+/* Keil Watch 中展开这个变量即可查看反馈、里程计和自动运动状态。 */
 extern DebugSnapshotData g_debugSnapshot;
 
 /* 更新序号：奇数表示正在更新，偶数表示本次更新已完成。 */
@@ -37,5 +39,6 @@ namespace DebugSnapshot
     constexpr uint32_t UPDATE_PERIOD_MS = 20U;
 
     void Update(const RemoteState &remote, const Chassis &chassis,
-                const ChaoheImuState &imu, const ChassisOdometry &odometry);
+                const ChaoheImuState &imu, const ChassisOdometry &odometry,
+                const AutoMove &autoMove);
 }
