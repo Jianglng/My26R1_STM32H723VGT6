@@ -10,6 +10,7 @@
 
 #include "Chassis.h"
 #include "chaohe_imu.h"
+#include "chassis_odometry.h"
 #include "remote_input.h"
 
 struct DebugSnapshotData
@@ -20,6 +21,8 @@ struct DebugSnapshotData
     ChaoheImuState imu = {};
     ChassisBodyVelocity measuredVelocity = {};
     bool measuredVelocityValid = false;
+    ChassisPose2D odometryPose = {};
+    bool odometryValid = false;
     uint32_t updateTick = 0U;
 };
 
@@ -33,5 +36,6 @@ namespace DebugSnapshot
 {
     constexpr uint32_t UPDATE_PERIOD_MS = 20U;
 
-    void Update(const RemoteState &remote, const Chassis &chassis, const ChaoheImuState &imu);
+    void Update(const RemoteState &remote, const Chassis &chassis,
+                const ChaoheImuState &imu, const ChassisOdometry &odometry);
 }

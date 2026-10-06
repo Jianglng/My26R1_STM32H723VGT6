@@ -29,39 +29,39 @@ namespace MathUtils
         return value;
     }
 
-    /** @brief 把周期值收到 [0, range)。 */
-    inline float WrapEncoder(float value, float range)
+    /** @brief 把周期值收到 [0, period)。 */
+    inline float WrapPeriodic(float value, float period)
     {
-        if (range <= 0.0f)
+        if (period <= 0.0f)
         {
             return value;
         }
 
-        value = fmodf(value, range);
+        value = fmodf(value, period);
         if (value < 0.0f)
         {
-            value += range;
+            value += period;
         }
         return value;
     }
 
-    /** @brief 把误差收到 (-range/2, range/2]，取较短的一侧。 */
-    inline float WrapEncoderError(float err, float range)
+    /** @brief 把周期差值收到 (-period/2, period/2]，取较短的一侧。 */
+    inline float WrapPeriodicError(float err, float period)
     {
-        if (range <= 0.0f)
+        if (period <= 0.0f)
         {
             return err;
         }
 
-        err = fmodf(err, range);
-        const float half = 0.5f * range;
+        err = fmodf(err, period);
+        const float half = 0.5f * period;
         if (err > half)
         {
-            err -= range;
+            err -= period;
         }
         else if (err < -half)
         {
-            err += range;
+            err += period;
         }
         return err;
     }

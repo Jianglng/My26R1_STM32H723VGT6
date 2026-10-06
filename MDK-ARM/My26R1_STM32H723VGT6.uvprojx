@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>USE_PWR_LDO_SUPPLY,USE_HAL_DRIVER,STM32H723xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Drivers/CMSIS/RTOS2/Include;../bsp;../vesc_can;../Task;../dji_can;../remote;../chaohe_imu;../kinematics;../pid;../robot_config;../math;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Drivers/CMSIS/RTOS2/Include;../bsp;../vesc_can;../Task;../dji_can;../remote;../chaohe_imu;../kinematics;../odometry;../pid;../robot_config;../math;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1924,6 +1924,21 @@
               <FileName>chassis_kinematics.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\kinematics\chassis_kinematics.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>odometry</GroupName>
+          <Files>
+            <File>
+              <FileName>chassis_odometry.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>..\odometry\chassis_odometry.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>chassis_odometry.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\odometry\chassis_odometry.h</FilePath>
             </File>
           </Files>
         </Group>

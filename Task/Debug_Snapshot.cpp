@@ -5,7 +5,8 @@ volatile uint32_t g_debugSnapshotSequence = 0U;
 
 namespace DebugSnapshot
 {
-    void Update(const RemoteState &remote, const Chassis &chassis, const ChaoheImuState &imu)
+    void Update(const RemoteState &remote, const Chassis &chassis,
+                const ChaoheImuState &imu, const ChassisOdometry &odometry)
     {
         /* 序号用于判断 Watch 是否正好读到更新过程中的中间状态。 */
         ++g_debugSnapshotSequence;
@@ -15,6 +16,8 @@ namespace DebugSnapshot
         g_debugSnapshot.imu = imu;
         g_debugSnapshot.measuredVelocity = chassis.MeasuredVelocity();
         g_debugSnapshot.measuredVelocityValid = chassis.HasMeasuredVelocity();
+        g_debugSnapshot.odometryPose = odometry.Pose();
+        g_debugSnapshot.odometryValid = odometry.Valid();
         g_debugSnapshot.updateTick = HAL_GetTick();
 
         ++g_debugSnapshotSequence;

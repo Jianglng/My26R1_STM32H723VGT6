@@ -67,7 +67,7 @@ float Pid::CalculateEncoder(float measure, float ref, float encoderRange)
     state_.measure = measure;
     state_.ref = ref;
 
-    float err = MathUtils::WrapEncoderError(state_.ref - state_.measure, encoderRange);
+    float err = MathUtils::WrapPeriodicError(state_.ref - state_.measure, encoderRange);
     if (fabsf(err) < state_.deadband)
     {
         err = 0.0f;

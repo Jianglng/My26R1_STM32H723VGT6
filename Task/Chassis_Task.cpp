@@ -3,6 +3,7 @@
 #include "Chassis.h"
 #include "Debug_Snapshot.h"
 #include "chaohe_imu.h"
+#include "chassis_odometry.h"
 #include "cmsis_os.h"
 #include "math_utils.h"
 #include "remote_input.h"
@@ -64,11 +65,14 @@ extern "C" void StartChassisTask(void *argument)
     static Chassis chassis;
     static RemoteInput remote;
     static ChaoheImu imu;
+    static ChassisOdometry odometry;
     uint32_t lastDebugSnapshotTick = 0U;
 
     chassis.Init();
     remote.Init(&huart5);
     imu.Init(&huart10);
+    odometry.Reset();
+    uint32_t lastOdometryCycles = DWT->CYCCNT;
     
     for (;;)
     {
@@ -91,12 +95,19 @@ extern "C" void StartChassisTask(void *argument)
         }
         chassis.Update();
         imu.Update();
+        const ChaoheImuState &imuState = imu.State();
+        const ChassisBodyVelocity &measuredVelocity = chassis.MeasuredVelocity();
+
+        const float odometryDt = chassis.Timer().GetDeltaT(&lastOdometryCycles);
+
+        odometry.Update(measuredVelocity.vx, measuredVelocity.vy, imuState.yaw,
+                        odometryDt, chassis.HasMeasuredVelocity() && imuState.online);
 
         /* 调试镜像不参与控制，低频更新以免给 1 ms 控制循环增加额外开销。 */
         const uint32_t now = HAL_GetTick();
         if ((now - lastDebugSnapshotTick) >= DebugSnapshot::UPDATE_PERIOD_MS)
         {
-            DebugSnapshot::Update(state, chassis, imu.State());
+            DebugSnapshot::Update(state, chassis, imuState, odometry);
             lastDebugSnapshotTick = now;
         }
         osDelay(1);

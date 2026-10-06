@@ -61,13 +61,13 @@ ChassisWheelCommand ChassisKinematics::Inverse(const ChassisBodyVelocity &vel,
         {
             const float angleRad = atan2f(vyWheel, vxWheel);
             /* 6020 编码器增加方向为顺时针，故目标角取负。 */
-            float target = MathUtils::WrapEncoder(ZERO_ENCODER[i] - angleRad * RAD_TO_ENCODER, ENCODER_MAX);
-            const float err = MathUtils::WrapEncoderError(target - static_cast<float>(encoder[i]), ENCODER_MAX);
+            float target = MathUtils::WrapPeriodic(ZERO_ENCODER[i] - angleRad * RAD_TO_ENCODER, ENCODER_MAX);
+            const float err = MathUtils::WrapPeriodicError(target - static_cast<float>(encoder[i]), ENCODER_MAX);
 
             /* 目标与当前超过 90 度时，舵向改走对侧，轮速取反。 */
             if (fabsf(err) > QUARTER_ENCODER)
             {
-                target = MathUtils::WrapEncoder(target + HALF_ENCODER, ENCODER_MAX);
+                target = MathUtils::WrapPeriodic(target + HALF_ENCODER, ENCODER_MAX);
                 rpm = -rpm;
             }
 
@@ -93,7 +93,7 @@ ChassisBodyVelocity ChassisKinematics::Forward(const int16_t encoder[RobotConfig
     for (uint32_t i = 0; i < RobotConfig::WHEEL_COUNT; ++i)
     {
         /* 与逆解使用相同零点和编码器方向。轮速正负表示沿舵向前进或后退。 */
-        const float angleRad = MathUtils::WrapEncoderError(ZERO_ENCODER[i] - static_cast<float>(encoder[i]), ENCODER_MAX) / RAD_TO_ENCODER;
+        const float angleRad = MathUtils::WrapPeriodicError(ZERO_ENCODER[i] - static_cast<float>(encoder[i]), ENCODER_MAX) / RAD_TO_ENCODER;
         const float speedMps = RpmToMps(wheelRpm[i]);
         const float vxWheel = speedMps * cosf(angleRad);
         const float vyWheel = speedMps * sinf(angleRad);

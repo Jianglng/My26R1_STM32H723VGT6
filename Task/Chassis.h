@@ -32,6 +32,9 @@ public:
     const ChassisBodyVelocity &MeasuredVelocity() const { return measuredVelocity_; }
     bool HasMeasuredVelocity() const { return measuredVelocityValid_; }
 
+    /** @brief 与 PID 共用已初始化的 DWT 计时器。 */
+    DwtTimer &Timer() { return dwt_; }
+
     /**
      * @brief 复制一份仅供调试观察的电机反馈。
      * @note 不参与控制；底层 getter 自己负责与 CAN 接收中断隔离。

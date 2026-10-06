@@ -127,6 +127,11 @@ virtualFolder:
         - path: ../kinematics/chassis_kinematics.cpp
         - path: ../kinematics/chassis_kinematics.h
       folders: []
+    - name: odometry
+      files:
+        - path: ../odometry/chassis_odometry.cpp
+        - path: ../odometry/chassis_odometry.h
+      folders: []
     - name: math
       files:
         - path: ../math/math_utils.h
@@ -171,6 +176,7 @@ targets:
         - ../remote
         - ../chaohe_imu
         - ../kinematics
+        - ../odometry
         - ../pid
         - ../robot_config
         - ../math
