@@ -32,6 +32,19 @@ virtualFolder:
                 - path: ../Core/Src/stm32h7xx_hal_msp.c
                 - path: ../Core/Src/stm32h7xx_hal_timebase_tim.c
               folders: []
+            - name: USB_DEVICE
+              files: []
+              folders:
+                - name: App
+                  files:
+                    - path: ../USB_DEVICE/App/usb_device.c
+                    - path: ../USB_DEVICE/App/usbd_desc.c
+                    - path: ../USB_DEVICE/App/usbd_cdc_if.c
+                  folders: []
+                - name: Target
+                  files:
+                    - path: ../USB_DEVICE/Target/usbd_conf.c
+                  folders: []
     - name: Drivers
       files: []
       folders:
@@ -39,8 +52,9 @@ virtualFolder:
           files:
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim_ex.c
-            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_cortex.c
-            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_fdcan.c
+            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pcd.c
+            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pcd_ex.c
+            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_ll_usb.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc_ex.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_flash.c
@@ -52,10 +66,12 @@ virtualFolder:
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mdma.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c
+            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_cortex.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c_ex.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_exti.c
+            - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_fdcan.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart.c
             - path: ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart_ex.c
           folders: []
@@ -79,6 +95,13 @@ virtualFolder:
             - path: ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c
             - path: ../Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c
             - path: ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F/port.c
+          folders: []
+        - name: USB_Device_Library
+          files:
+            - path: ../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c
+            - path: ../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c
+            - path: ../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c
+            - path: ../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c
           folders: []
     - name: Task
       files:
@@ -156,6 +179,7 @@ virtualFolder:
     - name: robot_config
       files:
         - path: ../robot_config/robot_config.h
+        - path: ../robot_config/auto_route_config.h
       folders: []
     - name: ::CMSIS
       files: []
@@ -195,6 +219,10 @@ targets:
         - ../robot_config
         - ../math
         - ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F
+        - ../USB_DEVICE/App
+        - ../USB_DEVICE/Target
+        - ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc
+        - ../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
         - .cmsis/include
         - RTE/_My26R1_STM32H723VGT6
       libList: []

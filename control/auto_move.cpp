@@ -20,6 +20,7 @@ namespace
                isfinite(param.acceleration) && param.acceleration > 0.0f &&
                isfinite(param.deceleration) && param.deceleration > 0.0f &&
                isfinite(param.alongKp) && param.alongKp >= 0.0f &&
+               isfinite(param.alongKd) && param.alongKd >= 0.0f &&
                isfinite(param.crossKp) && param.crossKp >= 0.0f &&
                isfinite(param.yawKp) && param.yawKp >= 0.0f &&
                isfinite(param.maxCorrectionVelocity) && param.maxCorrectionVelocity > 0.0f &&
@@ -32,7 +33,7 @@ namespace
                isfinite(param.yawSpeedTolerance) && param.yawSpeedTolerance > 0.0f &&
                isfinite(param.settleDuration) && param.settleDuration > 0.0f;
     }
-
+//限制二维向量的合成大小，同时保持方向不变
     void LimitVector(float &x, float &y, float limit)
     {
         const float length = hypotf(x, y);
@@ -95,8 +96,8 @@ bool AutoMove::Start(const ChassisPose2D &currentPose, const AutoMoveTarget &tar
     }
     else
     {
-        /* 零长度不求单位方向，沿用 Reset() 的世界 x/y 方向进行终点修正。
-         * 此时位置已在目标点，也仍需修正航向并检查是否停稳。 */
+        /* 沿用 Reset() 的世界 x/y 方向进行终点修正
+         * 此时位置已在目标点，也仍需修正航向并检查是否停稳 */
         motionState_.phase = AutoMovePhase::Settling;
     }
     /* 参考位置从起点开始推进，参考航向从第一拍起就使用指定目标。 */
@@ -104,7 +105,7 @@ bool AutoMove::Start(const ChassisPose2D &currentPose, const AutoMoveTarget &tar
     return true;
 }
 
-//梯形速度前馈+位置P反馈
+//梯形速度前馈+沿路径PD反馈+横向和航向P反馈
 void AutoMove::Update(const ChassisPose2D &currentPose, const ChassisBodyVelocity &measuredVelocity, float dt, bool feedbackValid)
 {
     /* 待机不推进轨迹；故障保持零输出，需复位或重新启动才能恢复。 */
@@ -160,13 +161,28 @@ void AutoMove::Update(const ChassisPose2D &currentPose, const ChassisBodyVelocit
     /* 到达判定使用距最终目标的距离，与上方本拍参考位置误差区分 */
     motionState_.positionError = hypotf(motionState_.target.x - currentPose.x, motionState_.target.y - currentPose.y);
 
-    /* 三路 P 反馈分别生成沿路径、横向和航向修正速度 */
-    float alongCorrection = param_.alongKp * motionState_.alongError;
+    /* 实测速度来自车体坐标系，先转到世界坐标系，再投影到路径方向。
+     * 即使车头在运动中旋转，沿路径速度的正方向也始终指向目标点。 */
+    const float cosYaw = cosf(currentPose.yaw);
+    const float sinYaw = sinf(currentPose.yaw);
+    const float measuredWorldVx = cosYaw * measuredVelocity.vx - sinYaw * measuredVelocity.vy;
+    const float measuredWorldVy = sinYaw * measuredVelocity.vx + cosYaw * measuredVelocity.vy;
+    motionState_.alongMeasuredSpeed = directionX_ * measuredWorldVx + directionY_ * measuredWorldVy;
+    motionState_.alongSpeedError = motionState_.referenceSpeed - motionState_.alongMeasuredSpeed;
+
+    /* 沿路径使用位置 P 和速度误差 D，不对位置误差作差分，也不再除以 dt。
+     * Settling 时参考速度为零，D 项为 -Kd * 实测沿路径速度，用于抑制超调。
+     * 分别记录限幅前的 P、D 两项，方便判断修正来源；横向和航向仍使用 P。 */
+    motionState_.alongPositionCorrection = param_.alongKp * motionState_.alongError;
+    motionState_.alongSpeedCorrection = param_.alongKd * motionState_.alongSpeedError;
+    float alongCorrection = motionState_.alongPositionCorrection + motionState_.alongSpeedCorrection;
     float crossCorrection = param_.crossKp * motionState_.crossError;
     float yawVelocity = param_.yawKp * motionState_.yawError;
 
     /* 有效输入仍可能在乘法、加法中溢出，异常结果不能继续用于控制。 */
-    if (!isfinite(motionState_.positionError) || !isfinite(alongCorrection) ||
+    if (!isfinite(motionState_.positionError) ||
+        !isfinite(motionState_.alongMeasuredSpeed) || !isfinite(motionState_.alongSpeedError) ||
+        !isfinite(alongCorrection) ||
         !isfinite(crossCorrection) || !isfinite(yawVelocity) ||
         !isfinite(hypotf(alongCorrection, crossCorrection)))
     {
@@ -180,7 +196,7 @@ void AutoMove::Update(const ChassisPose2D &currentPose, const ChassisBodyVelocit
     motionState_.crossCorrection = crossCorrection;
 
     /* 梯形前馈只沿路径输出；与反馈合成后得到世界速度 v=u*(vRef+vAlong)+n*vCross。
-     * 进入 Settling 时规划速度已为零，由位置反馈继续收敛到终点。 */
+     * 进入 Settling 时规划速度已为零，由位置反馈和速度反馈继续收敛到终点。 */
     const float alongVelocity = motionState_.referenceSpeed + alongCorrection;
     float worldVx = directionX_ * alongVelocity - directionY_ * crossCorrection;
     float worldVy = directionY_ * alongVelocity + directionX_ * crossCorrection;
@@ -206,6 +222,8 @@ void AutoMove::Update(const ChassisPose2D &currentPose, const ChassisBodyVelocit
         SetFault();
         return;
     }
+    //在调用 UpdateOutput() 前，AutoMove::Update() 先推进梯形规划，得到当前期望位置和速度，再根据里程计计算沿路径、横向和航向误差。
+    //然后将沿路径 PD、横向和航向 P 反馈与规划速度前馈合成，得到世界坐标系下的平移速度和角速度指令
 
     /* 限制最终速度及相邻两拍指令的变化，再用当前航向转成车体速度。 */
     UpdateOutput(worldVx, worldVy, yawVelocity, currentPose.yaw, dt);
@@ -226,7 +244,7 @@ void AutoMove::SetFault()
 void AutoMove::UpdateReference()
 {
     /* 读取梯形规划器当前的参考状态，将距离、速度、时间和阶段
-     * 分别复制到 AutoMove 的状态记录中，方便调试观察；这些不是实测值。 */
+     * 分别复制到 AutoMove 的状态记录中，方便调试观察 */
     const TrapezoidalProfileState &reference = distancePlanner_.State();
     motionState_.referenceDistance = reference.position;
     motionState_.referenceSpeed = reference.velocity;
@@ -246,10 +264,20 @@ void AutoMove::UpdateReference()
     motionState_.referencePose.yaw = motionState_.target.yaw;
 }
 
+/**
+ * @brief 将前馈和反馈合成的速度指令进行限幅、平滑处理，再转换成车体坐标系速度，供底盘执行
+ * @param worldVx 世界坐标系 x 方向速度 (m/s)
+ * @param worldVy 世界坐标系 y 方向速度 (m/s)
+ * @param yawVelocity 角速度 (rad/s)
+ * @param currentYaw 当前航向 (rad)
+ * @param dt 控制周期 (s)
+ */
 void AutoMove::UpdateOutput(float worldVx, float worldVy, float yawVelocity,
                             float currentYaw, float dt)
 {
+    //限制二维向量的合成大小，同时保持方向不变
     LimitVector(worldVx, worldVy, param_.maxOutputVelocity);
+    //限制角速度不超过最大角速度
     yawVelocity = MathUtils::ClampAbs(yawVelocity, param_.maxYawVelocity);
 
     /* 在世界坐标系限制平移速度向量的变化，转动时仍保持同一条路径。 */
@@ -259,7 +287,7 @@ void AutoMove::UpdateOutput(float worldVx, float worldVy, float yawVelocity,
     float deltaVx = worldVx - motionState_.worldVx;
     float deltaVy = worldVy - motionState_.worldVy;
     const float deltaSpeed = hypotf(deltaVx, deltaVy);
-    
+
     if (deltaSpeed > rate * dt)
     {
         LimitVector(deltaVx, deltaVy, rate * dt);

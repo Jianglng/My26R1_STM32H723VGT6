@@ -1,7 +1,7 @@
 #pragma once
 
 /**
- * @brief 相对起点的底盘位姿。
+ * @brief 相对起点的底盘位姿
  * @note  x/y 单位 m，yaw 单位 rad；+x 向前，+y 向左，逆时针为正。
  */
 struct ChassisPose2D

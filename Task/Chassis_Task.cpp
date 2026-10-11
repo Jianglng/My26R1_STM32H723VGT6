@@ -46,7 +46,8 @@ namespace
 
         const float scaleX = RobotConfig::MAX_VX / RobotConfig::REMOTE_CH_MAX;
         const float scaleY = RobotConfig::MAX_VY / RobotConfig::REMOTE_CH_MAX;
-        const float scaleW = RobotConfig::MAX_WZ / RobotConfig::REMOTE_CH_MAX;
+        const float maxWz = MathUtils::DegToRad(RobotConfig::MAX_WZ_DEG_PER_SEC);
+        const float scaleW = maxWz / RobotConfig::REMOTE_CH_MAX;
 
         const float stickForward = MathUtils::ApplyDeadband(static_cast<float>(remote.leftY), RobotConfig::REMOTE_DEADBAND);
         const float stickRight = MathUtils::ApplyDeadband(static_cast<float>(remote.leftX), RobotConfig::REMOTE_DEADBAND);
@@ -54,7 +55,7 @@ namespace
 
         vel.vx = MathUtils::ClampAbs(stickForward * scaleX * RobotConfig::REMOTE_VX_SIGN, RobotConfig::MAX_VX);
         vel.vy = MathUtils::ClampAbs(stickRight * scaleY * RobotConfig::REMOTE_VY_SIGN, RobotConfig::MAX_VY);
-        vel.wz = MathUtils::ClampAbs(stickYaw * scaleW * RobotConfig::REMOTE_WZ_SIGN, RobotConfig::MAX_WZ);
+        vel.wz = MathUtils::ClampAbs(stickYaw * scaleW * RobotConfig::REMOTE_WZ_SIGN, maxWz);
         return vel;
     }
 }
@@ -93,7 +94,7 @@ extern "C" void StartChassisTask(void *argument)
         const ChassisMode mode = SelectMode(state);
         if (mode != lastMode)
         {
-            /* 新切入自动档只启动一段运动；退出时取消，故障不自动重跑。 */
+            /* 新切入自动档重新开始航点任务；退出时取消当前任务。 */
             autoMode.Reset();
             lastMode = mode;
         }
@@ -130,7 +131,7 @@ extern "C" void StartChassisTask(void *argument)
         const uint32_t now = HAL_GetTick();
         if ((now - lastDebugSnapshotTick) >= DebugSnapshot::UPDATE_PERIOD_MS)
         {
-            DebugSnapshot::Update(state, chassis, imuState, odometry, autoMode.Motion());
+            DebugSnapshot::Update(state, chassis, imuState, odometry, autoMode);
             lastDebugSnapshotTick = now;
         }
         osDelay(1);

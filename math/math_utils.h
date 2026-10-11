@@ -7,6 +7,20 @@
  */
 namespace MathUtils
 {
+    constexpr float PI = 3.14159265358979323846f;
+
+    /** @brief 将角度从度转换为弧度。 */
+    constexpr float DegToRad(float degrees)
+    {
+        return degrees * PI / 180.0f;
+    }
+
+    /** @brief 将角度从弧度转换为度。 */
+    constexpr float RadToDeg(float radians)
+    {
+        return radians * 180.0f / PI;
+    }
+
     inline float ApplyDeadband(float value, float deadband)
     {
         if (fabsf(value) < deadband)

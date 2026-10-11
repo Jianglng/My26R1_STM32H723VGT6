@@ -9,22 +9,76 @@
  */
 
 #include "Chassis.h"
-#include "auto_move.h"
+#include "auto_mode_controller.h"
 #include "chaohe_imu.h"
 #include "chassis_odometry.h"
 #include "remote_input.h"
+
+/** @brief Watch 中显示的二维位姿，航向单位为度。 */
+struct DebugPose2D
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float yawDeg = 0.0f;
+};
+
+/** @brief Watch 中显示的底盘速度，角速度单位为度每秒。 */
+struct DebugBodyVelocity
+{
+    float vx = 0.0f;
+    float vy = 0.0f;
+    float wzDegPerSec = 0.0f;
+};
+
+/** @brief Watch 中显示的自动运动目标，航向单位为度。 */
+struct DebugAutoMoveTarget
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float yawDeg = 0.0f;
+};
+
+/** @brief 自动运动调试镜像，角度和角速度均转换为度制。 */
+struct DebugAutoMoveState
+{
+    AutoMovePhase phase = AutoMovePhase::Idle;
+    DebugPose2D startPose = {};
+    DebugAutoMoveTarget target = {};
+    DebugPose2D referencePose = {};
+
+    float referenceDistance = 0.0f;
+    float referenceSpeed = 0.0f;
+    float planningTime = 0.0f;
+    TrapezoidalPhase planningPhase = TrapezoidalPhase::Idle;
+
+    float alongError = 0.0f;
+    float crossError = 0.0f;
+    float yawErrorDeg = 0.0f;
+    float positionError = 0.0f;
+    float alongMeasuredSpeed = 0.0f;   ///< 实测沿路径速度 (m/s)。
+    float alongSpeedError = 0.0f;      ///< 规划速度减实测沿路径速度 (m/s)。
+    float alongPositionCorrection = 0.0f; ///< 限幅前的沿路径 P 修正速度 (m/s)。
+    float alongSpeedCorrection = 0.0f; ///< 限幅前的沿路径 D 修正速度 (m/s)。
+    float alongCorrection = 0.0f;
+    float crossCorrection = 0.0f;
+    float worldVx = 0.0f;
+    float worldVy = 0.0f;
+    float settledTime = 0.0f;
+    DebugBodyVelocity velocity = {};
+};
 
 struct DebugSnapshotData
 {
     RemoteState remote = {};
     Dji6020RxData steerFeedback[RobotConfig::WHEEL_COUNT] = {};
     VescRxData wheelFeedback[RobotConfig::WHEEL_COUNT] = {};
-    ChaoheImuState imu = {};
-    ChassisBodyVelocity measuredVelocity = {};
+    ChaoheImuState imu = {}; ///< imu.yaw 已是度，来自 IMU 原始输出。
+    DebugBodyVelocity measuredVelocity = {};
     bool measuredVelocityValid = false;
-    ChassisPose2D odometryPose = {};
+    DebugPose2D odometryPose = {};
     bool odometryValid = false;
-    AutoMoveState autoMove = {};
+    AutoRouteState autoRoute = {};
+    DebugAutoMoveState autoMove = {};
     uint32_t updateTick = 0U;
 };
 
@@ -40,5 +94,5 @@ namespace DebugSnapshot
 
     void Update(const RemoteState &remote, const Chassis &chassis,
                 const ChaoheImuState &imu, const ChassisOdometry &odometry,
-                const AutoMove &autoMove);
+                const AutoModeController &autoMode);
 }
