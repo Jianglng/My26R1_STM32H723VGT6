@@ -1,15 +1,50 @@
-# dot files
-/.vscode/launch.json
-/.settings
-/.eide/log
+# Keil/EIDE 构建目录。
+/build/
+/bin/
+/obj/
+/out/
+/Objects/
+/Listings/
+/My26R1_STM32H723VGT6/
+
+# Keil 也可能在工程目录直接生成中间文件和固件。
+# 仅匹配本层，避免忽略 .pack 内的说明文档或依赖文件。
+/*.axf
+/*.elf
+/*.hex
+/*.bin
+/*.map
+/*.lst
+/*.htm
+/*.crf
+/*.o
+/*.d
+/*.dep
+/*.lnp
+/*.iex
+/*.scvd
+
+# 本地编译日志和锁文件。
+/*.log
+/build_*.txt
+/*.lock
+
+# Keil 用户界面、调试会话和工程备份。
+/*.uvguix.*
+/*.uvopt
+/*.uvoptx
+/*.uvprojx.bak*
+
+# EIDE 本地状态、缓存、日志和导出模板。
+/.settings/
+/.eide/cache/
+/.eide/log/
+/.eide/logs/
 /.eide.usr.ctx.json
+/.eide/*.usr.ctx.json
+/*.ept
+/*.eide-template
 
-# project out
-/build
-/bin
-/obj
-/out
-
-# eide template
-*.ept
-*.eide-template
+# 保留 .uvprojx、.code-workspace、.clang-format 和 .eide 工程配置。
+# .cmsis、.pack、RTE 及 DebugConfig 是现有工程依赖，正常提交。
+# 不全局忽略 .sct/.ld 链接脚本、.lib/.a 库或 .htm 文档。

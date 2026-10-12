@@ -11,7 +11,8 @@
 #include "Chassis.h"
 #include "auto_mode_controller.h"
 #include "chaohe_imu.h"
-#include "chassis_odometry.h"
+#include "bsp_usb.h"
+#include "pose_source.h"
 #include "remote_input.h"
 
 /** @brief Watch 中显示的二维位姿，航向单位为度。 */
@@ -67,6 +68,36 @@ struct DebugAutoMoveState
     DebugBodyVelocity velocity = {};
 };
 
+/** @brief 定位反馈的度制镜像，updateTick 为对应数据的更新时间。 */
+struct DebugPoseFeedback
+{
+    DebugPose2D pose = {};
+    PoseSource source = PoseSource::Odometry;
+    uint32_t updateTick = 0U;
+    bool valid = false;
+};
+
+/** @brief 雷达协议调试镜像，原始雷达中心与换算后的车体中心分开观察。 */
+struct DebugLidarProtocol
+{
+    DebugPose2D radarPose = {};
+    uint32_t receiveTick = 0U;
+    uint32_t frameCount = 0U;
+    uint32_t checksumErrorCount = 0U;
+    uint32_t invalidValueCount = 0U;
+    bool hasFrame = false;
+    uint8_t lastFrame[15] = {};
+};
+
+struct DebugLocalizationState
+{
+    PoseSource selectedSource = PoseSource::Odometry;
+    DebugPoseFeedback currentPose = {};
+    DebugPoseFeedback odometryPose = {};
+    DebugPoseFeedback lidarPose = {};
+    DebugLidarProtocol lidarProtocol = {};
+};
+
 struct DebugSnapshotData
 {
     RemoteState remote = {};
@@ -75,8 +106,8 @@ struct DebugSnapshotData
     ChaoheImuState imu = {}; ///< imu.yaw 已是度，来自 IMU 原始输出。
     DebugBodyVelocity measuredVelocity = {};
     bool measuredVelocityValid = false;
-    DebugPose2D odometryPose = {};
-    bool odometryValid = false;
+    BspUsbRxState usbReceive = {};
+    DebugLocalizationState localization = {};
     AutoRouteState autoRoute = {};
     DebugAutoMoveState autoMove = {};
     uint32_t updateTick = 0U;
@@ -90,9 +121,9 @@ extern volatile uint32_t g_debugSnapshotSequence;
 
 namespace DebugSnapshot
 {
-    constexpr uint32_t UPDATE_PERIOD_MS = 20U;
+    constexpr uint32_t UPDATE_PERIOD_MS = 10U;
 
     void Update(const RemoteState &remote, const Chassis &chassis,
-                const ChaoheImuState &imu, const ChassisOdometry &odometry,
+                const ChaoheImuState &imu, const PoseSourceManager &poseSourceManager,
                 const AutoModeController &autoMode);
 }

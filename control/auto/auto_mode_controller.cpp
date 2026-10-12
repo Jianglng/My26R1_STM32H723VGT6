@@ -1,45 +1,28 @@
 #include "auto_mode_controller.h"
 
+#include "auto_move_config.h"
 #include "math_utils.h"
-#include "robot_config.h"
 
 #include <math.h>
 
 namespace
 {
-    const AutoMoveParam AUTO_PARAM =
-    {
-        RobotConfig::AUTO_MAX_VELOCITY,
-        RobotConfig::AUTO_ACCELERATION,
-        RobotConfig::AUTO_DECELERATION,
-        RobotConfig::AUTO_ALONG_KP,
-        RobotConfig::AUTO_ALONG_KD,
-        RobotConfig::AUTO_CROSS_KP,
-        RobotConfig::AUTO_YAW_KP,
-        RobotConfig::AUTO_MAX_CORRECTION_VELOCITY,
-        RobotConfig::AUTO_MAX_OUTPUT_VELOCITY,
-        MathUtils::DegToRad(RobotConfig::AUTO_MAX_YAW_VELOCITY_DEG_PER_SEC),
-        MathUtils::DegToRad(RobotConfig::AUTO_YAW_ACCELERATION_DEG_PER_SEC2),
-        RobotConfig::AUTO_POSITION_TOLERANCE,
-        MathUtils::DegToRad(RobotConfig::AUTO_YAW_TOLERANCE_DEG),
-        RobotConfig::AUTO_SPEED_TOLERANCE,
-        MathUtils::DegToRad(RobotConfig::AUTO_YAW_SPEED_TOLERANCE_DEG_PER_SEC),
-        RobotConfig::AUTO_SETTLE_DURATION
-    };
-
-    bool ChassisStopped(const ChassisBodyVelocity &velocity)
+    bool ChassisStopped(const ChassisBodyVelocity &velocity, const AutoMoveParam &autoMoveParam)
     {
         return isfinite(velocity.vx) && isfinite(velocity.vy) &&
                isfinite(velocity.wz) &&
-               hypotf(velocity.vx, velocity.vy) <= AUTO_PARAM.speedTolerance &&
-               fabsf(velocity.wz) <= AUTO_PARAM.yawSpeedTolerance;
+               hypotf(velocity.vx, velocity.vy) <= autoMoveParam.speedTolerance &&
+               fabsf(velocity.wz) <= autoMoveParam.yawSpeedTolerance;
     }
 }
 
-void AutoModeController::Reset()
+void AutoModeController::Reset(PoseSource poseSource)
 {
+    poseSource_ = poseSource;
+    autoMoveParam_ = AutoMoveConfig::ForSource(poseSource_);
     autoMove_.Reset();
     routeState_ = AutoRouteState{};
+    routeState_.poseSource = poseSource_;
     routeState_.pointCount = AutoRouteConfig::POINT_COUNT;
     routeState_.finished = (AutoRouteConfig::POINT_COUNT == 0U);
 }
@@ -50,6 +33,7 @@ bool AutoModeController::Update(const ChassisPose2D &currentPose,
                                 ChassisBodyVelocity &command)
 {
     command = ChassisBodyVelocity{};
+    const AutoMoveParam &autoMoveParam = autoMoveParam_;
 
     /* 航点表为空或已经执行完毕时，保持底盘停止。 */
     if (routeState_.finished ||
@@ -62,7 +46,7 @@ bool AutoModeController::Update(const ChassisPose2D &currentPose,
     /* 当前航点尚未启动时，先等待反馈有效且底盘停稳。 */
     if (autoMove_.State().phase == AutoMovePhase::Idle)
     {
-        if (feedbackValid && ChassisStopped(measuredVelocity))
+        if (feedbackValid && ChassisStopped(measuredVelocity, autoMoveParam))
         {
             const AutoRoutePoint &point =
                 AutoRouteConfig::POINTS[routeState_.currentPointIndex];
@@ -74,7 +58,7 @@ bool AutoModeController::Update(const ChassisPose2D &currentPose,
             };
 
             /* 每个航点独立建立一段梯形规划。 */
-            if (!autoMove_.Start(currentPose, target, AUTO_PARAM))
+            if (!autoMove_.Start(currentPose, target, autoMoveParam))
             {
                 return false;
             }

@@ -222,7 +222,7 @@ void AutoMove::Update(const ChassisPose2D &currentPose, const ChassisBodyVelocit
         SetFault();
         return;
     }
-    //在调用 UpdateOutput() 前，AutoMove::Update() 先推进梯形规划，得到当前期望位置和速度，再根据里程计计算沿路径、横向和航向误差。
+    //在调用 UpdateOutput() 前，AutoMove::Update() 先推进梯形规划，得到当前期望位置和速度，再根据当前位姿计算沿路径、横向和航向误差。
     //然后将沿路径 PD、横向和航向 P 反馈与规划速度前馈合成，得到世界坐标系下的平移速度和角速度指令
 
     /* 限制最终速度及相邻两拍指令的变化，再用当前航向转成车体速度。 */

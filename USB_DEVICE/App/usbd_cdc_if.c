@@ -22,6 +22,7 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
+#include "bsp_usb.h"
 
 /* USER CODE END INCLUDE */
 
@@ -62,7 +63,6 @@
   */
 
 /* USER CODE BEGIN PRIVATE_DEFINES */
-#define USB_CDC_RX_RING_SIZE 1024U
 /* USER CODE END PRIVATE_DEFINES */
 
 /**
@@ -96,12 +96,6 @@ uint8_t UserRxBufferHS[APP_RX_DATA_SIZE];
 uint8_t UserTxBufferHS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
-volatile USB_CDC_RxDebugTypeDef g_usb_rx_debug;
-static uint8_t usb_rx_ring[USB_CDC_RX_RING_SIZE];
-static volatile uint16_t usb_rx_read;
-static volatile uint16_t usb_rx_write;
-static volatile uint16_t usb_rx_used;
-static volatile uint8_t usb_rx_stream_reset;
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -160,11 +154,7 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_HS =
 static int8_t CDC_Init_HS(void)
 {
   /* USER CODE BEGIN 8 */
-  /* CDC re-enumeration must not join an old partial frame to new data. */
-  usb_rx_read = 0U;
-  usb_rx_write = 0U;
-  usb_rx_used = 0U;
-  usb_rx_stream_reset = 1U;
+  BspUsb_ResetReceive(1U);
   /* Set Application Buffers */
   USBD_CDC_SetTxBuffer(&hUsbDeviceHS, UserTxBufferHS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceHS, UserRxBufferHS);
@@ -180,6 +170,7 @@ static int8_t CDC_Init_HS(void)
 static int8_t CDC_DeInit_HS(void)
 {
   /* USER CODE BEGIN 9 */
+  BspUsb_ResetReceive(0U);
   return (USBD_OK);
   /* USER CODE END 9 */
 }
@@ -275,31 +266,7 @@ static int8_t CDC_Control_HS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_HS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 11 */
-  uint32_t i;
-
-  g_usb_rx_debug.packet_count++;
-  g_usb_rx_debug.byte_count += *Len;
-  g_usb_rx_debug.last_packet_len = *Len;
-
-  if (*Len > (USB_CDC_RX_RING_SIZE - usb_rx_used))
-  {
-    /* Drop the interrupted stream so the task never joins bytes across a gap. */
-    g_usb_rx_debug.overflow_count++;
-    g_usb_rx_debug.dropped_byte_count += usb_rx_used + *Len;
-    usb_rx_read = 0U;
-    usb_rx_write = 0U;
-    usb_rx_used = 0U;
-    usb_rx_stream_reset = 1U;
-  }
-  else
-  {
-    for (i = 0U; i < *Len; i++)
-    {
-      usb_rx_ring[usb_rx_write] = Buf[i];
-      usb_rx_write = (uint16_t)((usb_rx_write + 1U) % USB_CDC_RX_RING_SIZE);
-    }
-    usb_rx_used = (uint16_t)(usb_rx_used + *Len);
-  }
+  BspUsb_ReceiveBytes(Buf, *Len);
 
   USBD_CDC_SetRxBuffer(&hUsbDeviceHS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceHS);
@@ -352,33 +319,6 @@ static int8_t CDC_TransmitCplt_HS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
 }
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
-uint16_t CDC_Read_HS(uint8_t *buf, uint16_t capacity, uint8_t *stream_reset)
-{
-  uint32_t primask;
-  uint16_t count;
-  uint16_t i;
-
-  if ((buf == NULL) || (stream_reset == NULL))
-  {
-    return 0U;
-  }
-
-  /* Bounded copy with interrupts masked protects the ISR/task ring indices. */
-  primask = __get_PRIMASK();
-  __disable_irq();
-  *stream_reset = usb_rx_stream_reset;
-  usb_rx_stream_reset = 0U;
-  count = (usb_rx_used < capacity) ? usb_rx_used : capacity;
-  for (i = 0U; i < count; i++)
-  {
-    buf[i] = usb_rx_ring[usb_rx_read];
-    usb_rx_read = (uint16_t)((usb_rx_read + 1U) % USB_CDC_RX_RING_SIZE);
-  }
-  usb_rx_used = (uint16_t)(usb_rx_used - count);
-  __DMB();
-  __set_PRIMASK(primask);
-  return count;
-}
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
 
 /**

@@ -9,6 +9,7 @@ struct AutoRouteState
     uint32_t currentPointIndex = 0U; ///< 当前航点下标，从 0 开始。
     uint32_t pointCount = 0U;        ///< 航点总数。
     bool finished = false;            ///< 所有航点是否都已完成。
+    PoseSource poseSource = PoseSource::Odometry; ///< 当前航点任务使用的定位和参数来源。
 };
 
 /**
@@ -20,8 +21,8 @@ struct AutoRouteState
 class AutoModeController
 {
 public:
-    /** @brief 取消当前自动运动，回到等待启动状态。 */
-    void Reset();
+    /** @brief 取消当前自动运动，并绑定指定定位来源的参数，回到等待启动状态。 */
+    void Reset(PoseSource poseSource);
 
     /**
      * @brief 更新一次自动模式并返回车体目标速度。
@@ -41,6 +42,8 @@ public:
     const AutoMove &Motion() const { return autoMove_; }
 
 private:
+    PoseSource poseSource_ = PoseSource::Odometry;
+    AutoMoveParam autoMoveParam_ = {}; ///< Reset 时保存本次模式使用的参数，不在行进中更换。
     AutoMove autoMove_;
     AutoRouteState routeState_ = {};
 };

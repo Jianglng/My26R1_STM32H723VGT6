@@ -1,15 +1,6 @@
 #pragma once
 
-/**
- * @brief 相对起点的底盘位姿
- * @note  x/y 单位 m，yaw 单位 rad；+x 向前，+y 向左，逆时针为正。
- */
-struct ChassisPose2D
-{
-    float x = 0.0f;
-    float y = 0.0f;
-    float yaw = 0.0f;
-};
+#include "motion_types.h"
 
 /**
  * @brief 用实测车体速度和 IMU 航向累计相对位姿。

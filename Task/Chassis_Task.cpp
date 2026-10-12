@@ -3,12 +3,13 @@
 #include "Chassis.h"
 #include "Debug_Snapshot.h"
 #include "auto_mode_controller.h"
+#include "bsp_usb.h"
 #include "chaohe_imu.h"
-#include "chassis_odometry.h"
 #include "cmsis_os.h"
-#include "math_utils.h"
+#include "localization_config.h"
+#include "manual_mode_controller.h"
+#include "pose_source.h"
 #include "remote_input.h"
-#include "robot_config.h"
 #include "usart.h"
 
 namespace
@@ -20,7 +21,7 @@ namespace
         Auto
     };
 
-    ChassisMode SelectMode(const RemoteState &remote)
+    ChassisMode SelectChassisMode(const RemoteState &remote)
     {
         if (!remote.online)
         {
@@ -35,29 +36,6 @@ namespace
             default: return ChassisMode::Stop;
         }
     }
-
-    ChassisBodyVelocity MapRemote(const RemoteState &remote)
-    {
-        ChassisBodyVelocity vel = {};
-        if (!remote.online)
-        {
-            return vel;
-        }
-
-        const float scaleX = RobotConfig::MAX_VX / RobotConfig::REMOTE_CH_MAX;
-        const float scaleY = RobotConfig::MAX_VY / RobotConfig::REMOTE_CH_MAX;
-        const float maxWz = MathUtils::DegToRad(RobotConfig::MAX_WZ_DEG_PER_SEC);
-        const float scaleW = maxWz / RobotConfig::REMOTE_CH_MAX;
-
-        const float stickForward = MathUtils::ApplyDeadband(static_cast<float>(remote.leftY), RobotConfig::REMOTE_DEADBAND);
-        const float stickRight = MathUtils::ApplyDeadband(static_cast<float>(remote.leftX), RobotConfig::REMOTE_DEADBAND);
-        const float stickYaw = MathUtils::ApplyDeadband(static_cast<float>(remote.rightX), RobotConfig::REMOTE_DEADBAND);
-
-        vel.vx = MathUtils::ClampAbs(stickForward * scaleX * RobotConfig::REMOTE_VX_SIGN, RobotConfig::MAX_VX);
-        vel.vy = MathUtils::ClampAbs(stickRight * scaleY * RobotConfig::REMOTE_VY_SIGN, RobotConfig::MAX_VY);
-        vel.wz = MathUtils::ClampAbs(stickYaw * scaleW * RobotConfig::REMOTE_WZ_SIGN, maxWz);
-        return vel;
-    }
 }
 
 extern "C" void StartChassisTask(void *argument)
@@ -67,48 +45,63 @@ extern "C" void StartChassisTask(void *argument)
     static Chassis chassis;
     static RemoteInput remote;
     static ChaoheImu imu;
-    static ChassisOdometry odometry;
+    static PoseSourceManager poseSourceManager;
+    static ManualModeController manualMode;
     static AutoModeController autoMode;
     ChassisMode lastMode = ChassisMode::Stop;
     uint32_t lastDebugSnapshotTick = 0U;
 
     chassis.Init();
     remote.Init(&huart5);
-    imu.Init(&huart10);
-    odometry.Reset();
+    poseSourceManager.Reset(LocalizationConfig::POSE_SOURCE);
+    autoMode.Reset(poseSourceManager.Source());
+    if (poseSourceManager.Source() == PoseSource::Odometry)
+    {
+        /* IMU 只属于里程计定位，雷达模式不启动 IMU 接收 */
+        imu.Init(&huart10);
+    }
+    BspUsb::Init();
     uint32_t lastControlCycles = DWT->CYCCNT;
 
     for (;;)
     {
-        /* 本拍反馈先更新，再计算里程计和目标速度，最后执行电机控制。 */
-        imu.Update();
+        /* 先更新反馈和选定位姿，再计算目标速度，最后执行底盘控制。 */
         chassis.UpdateFeedback();
-        const ChaoheImuState &imuState = imu.State();
-        const ChassisBodyVelocity &measuredVelocity = chassis.MeasuredVelocity();
+        const ChassisBodyVelocity &measuredBodyVelocity = chassis.MeasuredVelocity();
         const float dt = chassis.Timer().GetDeltaT(&lastControlCycles);
-        const bool sensorValid = chassis.HasMeasuredVelocity() && imuState.online;
-        odometry.Update(measuredVelocity.vx, measuredVelocity.vy, imuState.yaw, dt, sensorValid);
-        const bool feedbackValid = sensorValid && odometry.Valid();
+        if (poseSourceManager.Source() == PoseSource::Odometry)
+        {
+            imu.Update();
+            const ChaoheImuState &odometryImuState = imu.State();
+            const bool odometryFeedbackValid = chassis.HasMeasuredVelocity() && odometryImuState.online;
+            poseSourceManager.UpdateOdometry(measuredBodyVelocity, odometryImuState.yaw, dt, odometryFeedbackValid, HAL_GetTick());
+        }
+
+        /* USB 非阻塞、限量处理；所有模式下都可观察雷达，不另建接收任务。 */
+        poseSourceManager.UpdateLidar();
+        PoseFeedback currentPoseFeedback = {};
+        const bool poseValid = poseSourceManager.GetCurrentPose(currentPoseFeedback);
+        const bool feedbackValid = chassis.HasMeasuredVelocity() && poseValid;
 
         const RemoteState state = remote.State();
-        const ChassisMode mode = SelectMode(state);
+        const ChassisMode mode = SelectChassisMode(state);
         if (mode != lastMode)
         {
             /* 新切入自动档重新开始航点任务；退出时取消当前任务。 */
-            autoMode.Reset();
+            autoMode.Reset(poseSourceManager.Source());
             lastMode = mode;
         }
 
         switch (mode)
         {
             case ChassisMode::Manual:
-                chassis.SetVelocity(MapRemote(state));
+                chassis.SetVelocity(manualMode.Update(state));
                 break;
 
             case ChassisMode::Auto:
             {
                 ChassisBodyVelocity autoVelocity = {};
-                if (autoMode.Update(odometry.Pose(), measuredVelocity, dt,
+                if (autoMode.Update(currentPoseFeedback.pose, measuredBodyVelocity, dt,
                                     feedbackValid, autoVelocity))
                 {
                     chassis.SetVelocity(autoVelocity);
@@ -131,7 +124,7 @@ extern "C" void StartChassisTask(void *argument)
         const uint32_t now = HAL_GetTick();
         if ((now - lastDebugSnapshotTick) >= DebugSnapshot::UPDATE_PERIOD_MS)
         {
-            DebugSnapshot::Update(state, chassis, imuState, odometry, autoMode);
+            DebugSnapshot::Update(state, chassis, imu.State(), poseSourceManager, autoMode);
             lastDebugSnapshotTick = now;
         }
         osDelay(1);

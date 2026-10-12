@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "robot_config.h"
+#include "motion_types.h"
 
 /**
  * @brief 三舵轮底盘运动学。
@@ -15,14 +16,6 @@
  * 不读遥控器，不调用 PID，也不发送 CAN。
  * 车体速度低于停止阈值时，轮速为 0，舵向保持上一拍。
  */
-
-/** @brief 车体速度 */
-struct ChassisBodyVelocity
-{
-    float vx;   ///< 前进速度 (m/s)，向前为正
-    float vy;   ///< 平移速度 (m/s)，向左为正
-    float wz;   ///< 旋转速度 (rad/s)，逆时针为正
-};
 
 /** @brief 三路舵轮逆解结果。 */
 struct ChassisWheelCommand

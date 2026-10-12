@@ -65,14 +65,6 @@
   */
 
 /* USER CODE BEGIN EXPORTED_TYPES */
-typedef struct
-{
-  uint32_t packet_count;
-  uint32_t byte_count;
-  uint32_t last_packet_len;
-  uint32_t overflow_count;
-  uint32_t dropped_byte_count;
-} USB_CDC_RxDebugTypeDef;
 /* USER CODE END EXPORTED_TYPES */
 
 /**
@@ -101,7 +93,6 @@ typedef struct
 extern USBD_CDC_ItfTypeDef USBD_Interface_fops_HS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
-extern volatile USB_CDC_RxDebugTypeDef g_usb_rx_debug;
 /* USER CODE END EXPORTED_VARIABLES */
 
 /**
@@ -116,8 +107,6 @@ extern volatile USB_CDC_RxDebugTypeDef g_usb_rx_debug;
 uint8_t CDC_Transmit_HS(uint8_t* Buf, uint16_t Len);
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
-/* Single task reader. stream_reset marks disconnect/reinit or buffer overflow. */
-uint16_t CDC_Read_HS(uint8_t *buf, uint16_t capacity, uint8_t *stream_reset);
 /* USER CODE END EXPORTED_FUNCTIONS */
 
 /**

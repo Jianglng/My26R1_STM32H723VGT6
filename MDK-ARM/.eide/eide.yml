@@ -3,9 +3,7 @@ name: My26R1_STM32H723VGT6
 type: ARM
 deviceName: STM32H723VGTx
 packDir: .pack/Keil/STM32H7xx_DFP.4.1.3
-srcDirs:
-  - ../robot_config
-  - ../chaohe_imu
+srcDirs: []
 virtualFolder:
   name: <virtual_root>
   files: []
@@ -107,10 +105,6 @@ virtualFolder:
       files:
         - path: ../Task/Chassis_Task.cpp
         - path: ../Task/Chassis_Task.h
-        - path: ../Task/Chassis.cpp
-        - path: ../Task/Chassis.h
-        - path: ../Task/Debug_Snapshot.cpp
-        - path: ../Task/Debug_Snapshot.h
       folders: []
     - name: bsp
       files:
@@ -120,66 +114,107 @@ virtualFolder:
         - path: ../bsp/bsp_dwt.h
         - path: ../bsp/bsp_uart.cpp
         - path: ../bsp/bsp_uart.h
+        - path: ../bsp/bsp_usb.cpp
+        - path: ../bsp/bsp_usb.h
       folders: []
-    - name: vesc_can
+    - name: protocol
+      files: []
+      folders:
+        - name: vesc
+          files:
+            - path: ../protocol/vesc/vesc_motor.cpp
+            - path: ../protocol/vesc/vesc_motor.h
+          folders: []
+        - name: dji
+          files:
+            - path: ../protocol/dji/dji_6020.cpp
+            - path: ../protocol/dji/dji_6020.h
+          folders: []
+        - name: remote
+          files:
+            - path: ../protocol/remote/remote_input.cpp
+            - path: ../protocol/remote/remote_input.h
+          folders: []
+        - name: imu
+          files:
+            - path: ../protocol/imu/chaohe_imu.cpp
+            - path: ../protocol/imu/chaohe_imu.h
+            - path: ../protocol/imu/hipnuc_dec.c
+            - path: ../protocol/imu/hipnuc_dec.h
+            - path: ../protocol/imu/hipnuc_sample.c
+            - path: ../protocol/imu/hipnuc_sample.h
+          folders: []
+        - name: lidar
+          files:
+            - path: ../protocol/lidar/lidar_pose_protocol.cpp
+            - path: ../protocol/lidar/lidar_pose_protocol.h
+          folders: []
+    - name: localization
       files:
-        - path: ../vesc_can/vesc_motor.cpp
-        - path: ../vesc_can/vesc_motor.h
-      folders: []
-    - name: dji_can
-      files:
-        - path: ../dji_can/dji_6020.cpp
-        - path: ../dji_can/dji_6020.h
-      folders: []
-    - name: remote
-      files:
-        - path: ../remote/remote_input.cpp
-        - path: ../remote/remote_input.h
-      folders: []
-    - name: chaohe_imu
-      files:
-        - path: ../chaohe_imu/chaohe_imu.cpp
-        - path: ../chaohe_imu/chaohe_imu.h
-        - path: ../chaohe_imu/hipnuc_dec.c
-        - path: ../chaohe_imu/hipnuc_dec.h
-        - path: ../chaohe_imu/hipnuc_sample.c
-        - path: ../chaohe_imu/hipnuc_sample.h
-      folders: []
-    - name: kinematics
-      files:
-        - path: ../kinematics/chassis_kinematics.cpp
-        - path: ../kinematics/chassis_kinematics.h
-      folders: []
-    - name: odometry
-      files:
-        - path: ../odometry/chassis_odometry.cpp
-        - path: ../odometry/chassis_odometry.h
-      folders: []
-    - name: trajectory
-      files:
-        - path: ../trajectory/trapezoidal_profile.cpp
-        - path: ../trajectory/trapezoidal_profile.h
+        - path: ../localization/chassis_odometry.cpp
+        - path: ../localization/chassis_odometry.h
+        - path: ../localization/lidar_localization.cpp
+        - path: ../localization/lidar_localization.h
+        - path: ../localization/pose_source.cpp
+        - path: ../localization/pose_source.h
       folders: []
     - name: control
+      files: []
+      folders:
+        - name: manual
+          files:
+            - path: ../control/manual/manual_mode_controller.cpp
+            - path: ../control/manual/manual_mode_controller.h
+          folders: []
+        - name: auto
+          files:
+            - path: ../control/auto/auto_mode_controller.cpp
+            - path: ../control/auto/auto_mode_controller.h
+            - path: ../control/auto/auto_move.cpp
+            - path: ../control/auto/auto_move.h
+          folders: []
+    - name: algorithm
+      files: []
+      folders:
+        - name: trajectory
+          files:
+            - path: ../algorithm/trajectory/trapezoidal_profile.cpp
+            - path: ../algorithm/trajectory/trapezoidal_profile.h
+          folders: []
+        - name: kinematics
+          files:
+            - path: ../algorithm/kinematics/chassis_kinematics.cpp
+            - path: ../algorithm/kinematics/chassis_kinematics.h
+          folders: []
+        - name: pid
+          files:
+            - path: ../algorithm/pid/pid.cpp
+            - path: ../algorithm/pid/pid.h
+          folders: []
+        - name: math
+          files:
+            - path: ../algorithm/math/math_utils.h
+          folders: []
+    - name: chassis
       files:
-        - path: ../control/auto_move.cpp
-        - path: ../control/auto_move.h
-        - path: ../control/auto_mode_controller.cpp
-        - path: ../control/auto_mode_controller.h
+        - path: ../chassis/Chassis.cpp
+        - path: ../chassis/Chassis.h
       folders: []
-    - name: math
+    - name: common
       files:
-        - path: ../math/math_utils.h
-      folders: []
-    - name: pid
-      files:
-        - path: ../pid/pid.cpp
-        - path: ../pid/pid.h
+        - path: ../common/motion_types.h
       folders: []
     - name: robot_config
       files:
-        - path: ../robot_config/robot_config.h
+        - path: ../robot_config/auto_move_config.h
         - path: ../robot_config/auto_route_config.h
+        - path: ../robot_config/localization_config.h
+        - path: ../robot_config/robot_config.h
+      folders: []
+    - name: debug
+      files:
+        - path: ../debug/Debug_Snapshot.cpp
+        - path: ../debug/Debug_Snapshot.h
       folders: []
     - name: ::CMSIS
       files: []
@@ -205,19 +240,6 @@ targets:
         - ../Middlewares/Third_Party/FreeRTOS/Source/include
         - ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
         - ../Drivers/CMSIS/RTOS2/Include
-        - ../bsp
-        - ../vesc_can
-        - ../Task
-        - ../dji_can
-        - ../remote
-        - ../chaohe_imu
-        - ../kinematics
-        - ../odometry
-        - ../trajectory
-        - ../control
-        - ../pid
-        - ../robot_config
-        - ../math
         - ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F
         - ../USB_DEVICE/App
         - ../USB_DEVICE/Target
@@ -225,6 +247,24 @@ targets:
         - ../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
         - .cmsis/include
         - RTE/_My26R1_STM32H723VGT6
+        - ../Task
+        - ../bsp
+        - ../protocol/vesc
+        - ../protocol/dji
+        - ../protocol/remote
+        - ../protocol/imu
+        - ../protocol/lidar
+        - ../localization
+        - ../control/manual
+        - ../control/auto
+        - ../algorithm/trajectory
+        - ../algorithm/kinematics
+        - ../algorithm/pid
+        - ../algorithm/math
+        - ../chassis
+        - ../common
+        - ../robot_config
+        - ../debug
       libList: []
     excludeList: []
     settings:

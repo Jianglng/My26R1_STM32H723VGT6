@@ -2,12 +2,11 @@
 
 #include <stdint.h>
 
-#include "chassis_kinematics.h"
-#include "chassis_odometry.h"
+#include "motion_types.h"
 #include "trapezoidal_profile.h"
 
 /**
- * @brief 单点运动目标，使用里程计坐标系。
+ * @brief 单点运动目标，使用当前选定的定位坐标系。
  * @note x/y 单位 m，yaw 单位 rad；yaw 是指定目标航向。
  */
 struct AutoMoveTarget
@@ -83,7 +82,7 @@ struct AutoMoveState
 /**
  * @brief 梯形前馈、沿路径 PD、横向 P 和航向 P 组成的单点运动控制器。
  *
- * 目标位置和反馈位姿必须使用同一个里程计坐标系。
+ * 目标位置和反馈位姿必须使用同一个定位坐标系。
  * 只计算车体目标速度，不读取传感器，不调用底盘，也不发送 CAN。
  */
 class AutoMove
@@ -102,10 +101,10 @@ public:
 
     /**
      * @brief 按实际时间间隔更新，行进和终点修正阶段均修正航向。
-     * @param currentPose 当前里程计位姿，yaw 单位 rad。
+     * @param currentPose 当前选定来源的车体中心位姿，yaw 单位 rad。
      * @param measuredVelocity 实测车体速度，单位 m/s、rad/s。
      * @param dt 本次与上次更新的实际间隔 (s)，有效范围 (0, 0.05]。
-     * @param feedbackValid 里程计、轮速、舵角和 IMU 反馈均有效。
+     * @param feedbackValid 选定位姿、轮速和舵角反馈均有效。
      * @note Fault 保持零输出，需 Reset() 或重新 Start() 才能恢复。
      */
     void Update(const ChassisPose2D &currentPose,
@@ -124,9 +123,9 @@ private:
                       float currentYaw, float dt);
     void UpdateArrival(const ChassisBodyVelocity &measuredVelocity, float dt);
 
-    TrapezoidalProfile distancePlanner_;//生成一维梯形参考的规划器
+    TrapezoidalProfile distancePlanner_;       ///< 一维路径距离规划器。
     AutoMoveParam param_ = {};
-    AutoMoveState motionState_ = {};//自动运动的状态与输出
+    AutoMoveState motionState_ = {}; ///< 自动运动的状态与输出。
     float pathLength_ = 0.0f;
     float directionX_ = 1.0f;
     float directionY_ = 0.0f;

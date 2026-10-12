@@ -2,6 +2,8 @@
 
 #include "math_utils.h"
 
+#include <string.h>
+
 DebugSnapshotData g_debugSnapshot = {};
 volatile uint32_t g_debugSnapshotSequence = 0U;
 
@@ -25,6 +27,40 @@ namespace DebugSnapshot
             debugVelocity.vy = velocity.vy;
             debugVelocity.wzDegPerSec = MathUtils::RadToDeg(velocity.wz);
             return debugVelocity;
+        }
+
+        DebugPoseFeedback ToDebugPoseFeedback(const PoseFeedback &feedback)
+        {
+            DebugPoseFeedback debugFeedback = {};
+            debugFeedback.pose = ToDebugPose(feedback.pose);
+            debugFeedback.source = feedback.source;
+            debugFeedback.updateTick = feedback.updateTick;
+            debugFeedback.valid = feedback.valid;
+            return debugFeedback;
+        }
+
+        DebugLocalizationState ToDebugLocalization(const PoseSourceManager &poseSourceManager)
+        {
+            DebugLocalizationState debugLocalization = {};
+            PoseFeedback feedback = {};
+            debugLocalization.selectedSource = poseSourceManager.Source();
+            poseSourceManager.GetCurrentPose(feedback);
+            debugLocalization.currentPose = ToDebugPoseFeedback(feedback);
+            poseSourceManager.GetOdometryPose(feedback);
+            debugLocalization.odometryPose = ToDebugPoseFeedback(feedback);
+            poseSourceManager.GetLidarPose(feedback);
+            debugLocalization.lidarPose = ToDebugPoseFeedback(feedback);
+
+            const LidarPoseProtocolState &lidarState = poseSourceManager.LidarProtocolState();
+            DebugLidarProtocol &debugLidar = debugLocalization.lidarProtocol;
+            debugLidar.radarPose = ToDebugPose(lidarState.radarPose);
+            debugLidar.receiveTick = lidarState.receiveTick;
+            debugLidar.frameCount = lidarState.frameCount;
+            debugLidar.checksumErrorCount = lidarState.checksumErrorCount;
+            debugLidar.invalidValueCount = lidarState.invalidValueCount;
+            debugLidar.hasFrame = lidarState.hasFrame;
+            memcpy(debugLidar.lastFrame, lidarState.lastFrame, sizeof(debugLidar.lastFrame));
+            return debugLocalization;
         }
 
         DebugAutoMoveState ToDebugAutoMoveState(const AutoMoveState &state)
@@ -62,7 +98,7 @@ namespace DebugSnapshot
     }
 
     void Update(const RemoteState &remote, const Chassis &chassis,
-                const ChaoheImuState &imu, const ChassisOdometry &odometry,
+                const ChaoheImuState &imu, const PoseSourceManager &poseSourceManager,
                 const AutoModeController &autoMode)
     {
         /* 序号用于判断 Watch 是否正好读到更新过程中的中间状态。 */
@@ -73,8 +109,8 @@ namespace DebugSnapshot
         g_debugSnapshot.imu = imu;
         g_debugSnapshot.measuredVelocity = ToDebugVelocity(chassis.MeasuredVelocity());
         g_debugSnapshot.measuredVelocityValid = chassis.HasMeasuredVelocity();
-        g_debugSnapshot.odometryPose = ToDebugPose(odometry.Pose());
-        g_debugSnapshot.odometryValid = odometry.Valid();
+        g_debugSnapshot.usbReceive = BspUsb::RxState();
+        g_debugSnapshot.localization = ToDebugLocalization(poseSourceManager);
         g_debugSnapshot.autoRoute = autoMode.RouteState();
         g_debugSnapshot.autoMove = ToDebugAutoMoveState(autoMode.Motion().State());
         g_debugSnapshot.updateTick = HAL_GetTick();
