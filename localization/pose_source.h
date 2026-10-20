@@ -23,6 +23,7 @@ public:
     bool GetCurrentPose(PoseFeedback &feedback) const;
     PoseSource Source() const { return selectedSource_; }
     const LidarPoseProtocolState &LidarProtocolState() const { return lidarLocalization_.ProtocolState(); }
+    const LidarOriginState &LidarOrigin() const { return lidarLocalization_.OriginState(); }
 
 private:
     PoseSource selectedSource_ = PoseSource::Odometry;

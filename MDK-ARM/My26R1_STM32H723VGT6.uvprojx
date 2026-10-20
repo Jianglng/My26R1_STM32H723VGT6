@@ -2346,9 +2346,6 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>::CMSIS</GroupName>
-        </Group>
-        <Group>
           <GroupName>Task</GroupName>
           <Files>
             <File>
@@ -2952,6 +2949,9 @@
               <FilePath>../debug/Debug_Snapshot.h</FilePath>
             </File>
           </Files>
+        </Group>
+        <Group>
+          <GroupName>::CMSIS</GroupName>
         </Group>
       </Groups>
     </Target>

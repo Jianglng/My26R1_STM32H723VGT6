@@ -1,6 +1,6 @@
 # 工程结构与定位来源
 
-本次整理将硬件接收、设备协议、定位、模式控制和算法分开。默认使用里程计，原有里程计参数和航点数值保留；雷达参数独立配置，尚需实车调试。
+本次整理将硬件接收、设备协议、定位、模式控制和算法分开。当前选择雷达，里程计与雷达参数独立配置。
 
 ## 目录职责
 
@@ -40,7 +40,7 @@ tests/                        主机行为测试，使用实际解析、定位�
 |---|---|
 | `robot_config/robot_config.h` | 底盘机械参数、电机 ID、手动速度、舵向 PID |
 | `robot_config/auto_move_config.h` | `AutoMoveConfig::Odometry`、`AutoMoveConfig::Lidar` 两套自动运动参数 |
-| `robot_config/auto_route_config.h` | 目标 x/y 和 yawDeg，按数组顺序跑点 |
+| `robot_config/auto_route_config.h` | 车体中心的绝对目标 x/y 和 yawDeg，按数组顺序跑点 |
 | `robot_config/localization_config.h` | 位姿来源、雷达超时、安装偏移、USB 每拍读取上限 |
 
 例如，选择雷达时修改：
@@ -104,21 +104,32 @@ USB 断连、重新枚举或缓存溢出时清除协议半帧并使旧雷达反�
 
 ## 雷达中心到车体中心
 
-安装偏移定义为车体坐标系中“车体中心指向雷达中心”的向量；yaw 偏移定义为雷达坐标轴相对车体坐标轴的角度。
+雷达定位参考点使用实测旋转中心。安装偏移为车体坐标系中“旋转中心指向雷达中心”的向量：前方 0.4636 m、左方 0.0160 m。yaw 偏移为雷达坐标轴相对车体坐标轴的角度，当前为 0°。
 
 ```text
 yawChassis = yawRadar - yawMount
-pChassis   = pRadar - R(yawChassis) * offsetBody
+centerWorld = pRadar - R(yawChassis) * offsetBody
+currentPosition = centerWorld - initialCenterWorld
 ```
 
-默认安装 x=-0.08667 m、y=0、yaw 偏移=0°，依据参考工程 `Vision/Eye_get.h` 中 `delta_l=86.67 mm` 及 `Eye_get.c` 的中心换算，等价于：
+旋转中心的世界位置计算如下：
 
 ```cpp
-centerX = radarX + 0.08667f * cosf(yaw);
-centerY = radarY + 0.08667f * sinf(yaw);
+centerWorldX = radarX - 0.4636f * cosf(yaw) + 0.0160f * sinf(yaw);
+centerWorldY = radarY - 0.4636f * sinf(yaw) - 0.0160f * cosf(yaw);
 ```
 
-里程计使用上电建立的局部坐标系，雷达使用地图世界坐标系。当前航点表只有一份，切换定位来源前须将航点填写为对应坐标系中的车体中心目标；不自动平移、旋转或重新归零雷达地图坐标。
+定位 Reset 后，首次完整、未超时且换算有效的雷达帧记录 initialCenterWorld，之后只减去该固定位置。原点在所有底盘模式下均可建立，不等待进入自动档；建立时车辆应停稳且小电脑定位已稳定。帧有效只表示协议、数值和新鲜度满足要求，并不自动判断定位是否稳定。
+
+跑点坐标轴保留雷达世界 x/y 方向，航向保留安装角修正后的世界航向，不旋转坐标轴、不减初始 yaw。初始雷达为 `(0,0,0)` 时，记录的中心世界位置为 `(-0.4636,-0.0160)`，输出为 `(0,0,0)`；初始 yaw 非零时输出保留该航向。
+
+航点 `{5.0f,0.0f,0.0f}` 表示旋转中心沿世界 +x 相对原点移动 5 m；随后 `{5.0f,0.0f,90.0f}` 表示保持同一目标位置转到 90°。不需要逐个换算航点。里程计仍使用原有局部坐标。
+
+超时、USB 断连/溢出、手动/自动切换以及航点切换均保留原点；只有定位 Reset 才清除原点。小电脑中途重新设置地图原点时，须重新初始化单片机定位并重新开始路线，不能沿用旧原点。
+
+本次只修改定位参考点与位置归零；现有几何中心运动学及轮速反馈未加入 O/G 速度换算。实测旋转中心与运动学模型之间的差异仍须实车验证，定位归零不代表已解决该差异。
+
+连续两个航点的 x/y 相同、仅 yawDeg 不同时，目标车体中心保持不动。实际未到达该中心时，位置反馈仍会修正残余误差。
 
 ## Watch 入口
 
@@ -130,7 +141,8 @@ centerY = radarY + 0.08667f * sinf(yaw);
 | `localization.selectedSource` | 当前选择的定位来源 |
 | `localization.currentPose` | 自动控制实际采用的车体中心位姿、时间和有效性 |
 | `localization.odometryPose` | 里程计反馈；雷达模式下不积分且保持无效 |
-| `localization.lidarPose` | 换算后的雷达车体中心反馈 |
+| `localization.lidarPose` | 相对固定起点的旋转中心反馈；yaw 为世界航向 |
+| `localization.lidarOrigin` | initialized 及初始旋转中心世界坐标 initialCenterWorldX/Y |
 | `localization.lidarProtocol` | 原始雷达中心位姿、有效帧计数、校验错误及最后一帧 |
 | `autoRoute.poseSource` | 自动航点任务绑定的参数来源 |
 | `autoMove` | 梯形参考、位置和速度反馈、输出与运动阶段 |
@@ -140,6 +152,6 @@ centerY = radarY + 0.08667f * sinf(yaw);
 
 ## 验证与 CubeMX 再生成
 
-安装 g++ 后，在 PowerShell 中运行 `./tests/run_host_tests.ps1`。测试包含分包连包、坏帧重同步、NaN/Inf 拒绝、单拍预算、溢出和断连恢复、接收时间超时、计数回绕、安装偏移、来源隔离、参数选择和手动映射。主机测试不替代实车定位精度和控制周期耗时验证。
+原点转换通过临时主机测试验证，包含首次有效帧、平移、旋转、非零初始航向、分包连包、超时/断连恢复及显式复位。工程中的 tests 文件目前已删除，未恢复；主机测试不替代实车定位精度和控制周期耗时验证。
 
 Keil/EIDE 的应用分组和头文件路径均已同步迁移。以后通过 CubeMX 重新生成时，需要核对应用源文件和 include 路径仍在工程中，并检查 `freertos.c` 的 `MX_USB_DEVICE_Init()` 是否又被自动插入默认任务；USB 仍应由 BSP 在底盘初始化阶段统一初始化一次。

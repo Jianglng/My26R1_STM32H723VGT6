@@ -11,6 +11,8 @@ void LidarLocalization::Reset()
     lidarProtocol_.Reset();
     lidarFeedback_ = PoseFeedback{};
     lidarFeedback_.source = PoseSource::Lidar;
+    lidarOrigin_ = LidarOriginState{};
+    centerPoseValid_ = false;
 }
 
 void LidarLocalization::Update()
@@ -22,34 +24,33 @@ void LidarLocalization::Update()
     {
         lidarProtocol_.ResetStream();
         lidarFeedback_.valid = false;
+        centerPoseValid_ = false;
     }
 
-    /* 单拍只处理本次读到的有限字节；多帧时保留最后一帧，半帧留待下拍。 */
-    bool receivedPose = false;
+    /* 逐帧换算：首个新鲜有效帧建立原点，后续帧更新位置；半帧留待下拍。 */
     for (uint16_t i = 0U; i < count; ++i)
     {
         if (lidarProtocol_.FeedByte(usbRxBytes_[i], usbRxTicks_[i]))
         {
-            receivedPose = true;
+            const LidarPoseProtocolState &frame = lidarProtocol_.State();
+            const bool frameFresh = BspUsb::Configured() &&
+                (HAL_GetTick() - frame.receiveTick) <= LocalizationConfig::LIDAR_TIMEOUT_MS;
+            centerPoseValid_ = frameFresh && UpdateChassisPose();
         }
     }
-    if (receivedPose)
-    {
-        UpdateChassisPose();
-    }
-
     const LidarPoseProtocolState &lidarState = lidarProtocol_.State();
     /* 读取和解析后再取当前时间，避免中途到达的新帧时间晚于本拍起始时间。 */
     const uint32_t nowTick = HAL_GetTick();
     /* 用原始 USB 接收时间判断新鲜度，而不是把解析积压数据的时间当作接收时间。
      * 无符号减法允许 HAL 毫秒计数正常回绕；超时不切回里程计。 */
-    lidarFeedback_.valid = BspUsb::Configured() && lidarState.hasFrame &&
+    lidarFeedback_.valid = centerPoseValid_ && lidarOrigin_.initialized &&
+                           BspUsb::Configured() && lidarState.hasFrame &&
                            (nowTick - lidarState.receiveTick) <= LocalizationConfig::LIDAR_TIMEOUT_MS &&
                            isfinite(lidarFeedback_.pose.x) && isfinite(lidarFeedback_.pose.y) &&
                            isfinite(lidarFeedback_.pose.yaw);
 }
 
-void LidarLocalization::UpdateChassisPose()
+bool LidarLocalization::UpdateChassisPose()
 {
     const LidarPoseProtocolState &lidarState = lidarProtocol_.State();
     const ChassisPose2D &radarPose = lidarState.radarPose;
@@ -59,13 +60,36 @@ void LidarLocalization::UpdateChassisPose()
     const float cosYaw = cosf(chassisYawRad);
     const float sinYaw = sinf(chassisYawRad);
 
-    /* pRadar = pChassis + R(yawChassis) * 安装偏移，因此反解车体中心需减去偏移。
-     * 默认偏移 x=-0.08667 m，对应参考工程 center=radar+delta_l*[cos(yaw),sin(yaw)]。 */
-    lidarFeedback_.pose.x = radarPose.x - cosYaw * LocalizationConfig::LIDAR_OFFSET_X_M +
-                            sinYaw * LocalizationConfig::LIDAR_OFFSET_Y_M;
-    lidarFeedback_.pose.y = radarPose.y - sinYaw * LocalizationConfig::LIDAR_OFFSET_X_M -
-                            cosYaw * LocalizationConfig::LIDAR_OFFSET_Y_M;
+    /* 安装向量固定在车体上，须按实时航向转到世界系后减去，得到旋转中心。 */
+    const float centerWorldX = radarPose.x - cosYaw * LocalizationConfig::LIDAR_OFFSET_X_M +
+                                           sinYaw * LocalizationConfig::LIDAR_OFFSET_Y_M;
+    const float centerWorldY = radarPose.y - sinYaw * LocalizationConfig::LIDAR_OFFSET_X_M -
+                                           cosYaw * LocalizationConfig::LIDAR_OFFSET_Y_M;
+    if (!isfinite(centerWorldX) || !isfinite(centerWorldY) || !isfinite(chassisYawRad))
+    {
+        return false;
+    }
+
+    /* 仅首次记录原点；超时、断连和航点切换后仍沿用，防止路线坐标跳变。 */
+    if (!lidarOrigin_.initialized)
+    {
+        lidarOrigin_.initialCenterWorldX = centerWorldX;
+        lidarOrigin_.initialCenterWorldY = centerWorldY;
+        lidarOrigin_.initialized = true;
+    }
+
+    const float relativeX = centerWorldX - lidarOrigin_.initialCenterWorldX;
+    const float relativeY = centerWorldY - lidarOrigin_.initialCenterWorldY;
+    if (!isfinite(relativeX) || !isfinite(relativeY))
+    {
+        return false;
+    }
+
+    /* 只减初始位置：保留世界 x/y 方向和世界航向，不按初始 yaw 旋转坐标轴。 */
+    lidarFeedback_.pose.x = relativeX;
+    lidarFeedback_.pose.y = relativeY;
     lidarFeedback_.pose.yaw = chassisYawRad;
     lidarFeedback_.updateTick = lidarState.receiveTick;
     lidarFeedback_.source = PoseSource::Lidar;
+    return true;
 }

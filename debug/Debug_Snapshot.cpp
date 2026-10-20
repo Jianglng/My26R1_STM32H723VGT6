@@ -50,6 +50,7 @@ namespace DebugSnapshot
             debugLocalization.odometryPose = ToDebugPoseFeedback(feedback);
             poseSourceManager.GetLidarPose(feedback);
             debugLocalization.lidarPose = ToDebugPoseFeedback(feedback);
+            debugLocalization.lidarOrigin = poseSourceManager.LidarOrigin();
 
             const LidarPoseProtocolState &lidarState = poseSourceManager.LidarProtocolState();
             DebugLidarProtocol &debugLidar = debugLocalization.lidarProtocol;
@@ -85,6 +86,8 @@ namespace DebugSnapshot
             debugState.positionError = state.positionError;
             debugState.alongMeasuredSpeed = state.alongMeasuredSpeed;
             debugState.alongSpeedError = state.alongSpeedError;
+            debugState.activeAlongKp = state.activeAlongKp;
+            debugState.activeAlongKd = state.activeAlongKd;
             debugState.alongPositionCorrection = state.alongPositionCorrection;
             debugState.alongSpeedCorrection = state.alongSpeedCorrection;
             debugState.alongCorrection = state.alongCorrection;

@@ -6,7 +6,7 @@
 #include "trapezoidal_profile.h"
 
 /**
- * @brief 单点运动目标，使用当前选定的定位坐标系。
+ * @brief 车体中心的单点绝对目标，使用当前选定的定位坐标系。
  * @note x/y 单位 m，yaw 单位 rad；yaw 是指定目标航向。
  */
 struct AutoMoveTarget
@@ -23,8 +23,10 @@ struct AutoMoveParam
     float acceleration;                ///< 规划加速度及输出加速度限制 (m/s^2)。
     float deceleration;                ///< 规划减速度及输出减速度限制 (m/s^2)。
 
-    float alongKp;                     ///< 沿路径位置 P 增益 (1/s)，允许为零。
-    float alongKd;                     ///< 沿路径速度误差反馈增益 (无量纲)，零时恢复纯 P。
+    float trackingAlongKp;             ///< Tracking 阶段沿路径位置 P 增益 (1/s)，允许为零。
+    float trackingAlongKd;             ///< Tracking 阶段沿路径速度误差反馈增益，无量纲。
+    float settlingAlongKp;             ///< Settling 阶段沿路径位置 P 增益 (1/s)，允许为零。
+    float settlingAlongKd;             ///< Settling 阶段沿路径速度误差反馈增益，无量纲。
     float crossKp;                     ///< 横向位置 P 增益 (1/s)，允许为零。
     float yawKp;                       ///< 航向 P 增益 (1/s)，允许为零。
 
@@ -69,6 +71,8 @@ struct AutoMoveState
     float positionError = 0.0f;        ///< 距离最终目标点的距离 (m)。
     float alongMeasuredSpeed = 0.0f;   ///< 实测速度在路径方向的分量 (m/s)，沿路径为正。
     float alongSpeedError = 0.0f;      ///< 规划速度减实测沿路径速度 (m/s)。
+    float activeAlongKp = 0.0f;        ///< 当前阶段实际使用的沿路径位置 P 增益。
+    float activeAlongKd = 0.0f;        ///< 当前阶段实际使用的沿路径速度误差反馈增益。
     float alongPositionCorrection = 0.0f; ///< 限幅前的沿路径 P 修正速度 (m/s)。
     float alongSpeedCorrection = 0.0f; ///< 限幅前的沿路径 D 修正速度 (m/s)。
     float alongCorrection = 0.0f;      ///< 限幅后的沿路径反馈速度 (m/s)。
@@ -82,7 +86,7 @@ struct AutoMoveState
 /**
  * @brief 梯形前馈、沿路径 PD、横向 P 和航向 P 组成的单点运动控制器。
  *
- * 目标位置和反馈位姿必须使用同一个定位坐标系。
+ * 目标位置和反馈位姿均以车体中心为参考，且必须使用同一个定位坐标系。
  * 只计算车体目标速度，不读取传感器，不调用底盘，也不发送 CAN。
  */
 class AutoMove

@@ -50,6 +50,7 @@ bool AutoModeController::Update(const ChassisPose2D &currentPose,
         {
             const AutoRoutePoint &point =
                 AutoRouteConfig::POINTS[routeState_.currentPointIndex];
+            /* 航点与 currentPose 均为车体中心；这里只换算角度，不再补偿安装偏移。 */
             const AutoMoveTarget target =
             {
                 point.x,

@@ -245,8 +245,6 @@ targets:
         - ../USB_DEVICE/Target
         - ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc
         - ../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
-        - .cmsis/include
-        - RTE/_My26R1_STM32H723VGT6
         - ../Task
         - ../bsp
         - ../protocol/vesc
@@ -265,6 +263,8 @@ targets:
         - ../common
         - ../robot_config
         - ../debug
+        - .cmsis/include
+        - RTE/_My26R1_STM32H723VGT6
       libList: []
     excludeList: []
     settings:

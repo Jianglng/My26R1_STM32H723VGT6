@@ -19,8 +19,10 @@ namespace
         return isfinite(param.maxVelocity) && param.maxVelocity > 0.0f &&
                isfinite(param.acceleration) && param.acceleration > 0.0f &&
                isfinite(param.deceleration) && param.deceleration > 0.0f &&
-               isfinite(param.alongKp) && param.alongKp >= 0.0f &&
-               isfinite(param.alongKd) && param.alongKd >= 0.0f &&
+               isfinite(param.trackingAlongKp) && param.trackingAlongKp >= 0.0f &&
+               isfinite(param.trackingAlongKd) && param.trackingAlongKd >= 0.0f &&
+               isfinite(param.settlingAlongKp) && param.settlingAlongKp >= 0.0f &&
+               isfinite(param.settlingAlongKd) && param.settlingAlongKd >= 0.0f &&
                isfinite(param.crossKp) && param.crossKp >= 0.0f &&
                isfinite(param.yawKp) && param.yawKp >= 0.0f &&
                isfinite(param.maxCorrectionVelocity) && param.maxCorrectionVelocity > 0.0f &&
@@ -173,8 +175,13 @@ void AutoMove::Update(const ChassisPose2D &currentPose, const ChassisBodyVelocit
     /* 沿路径使用位置 P 和速度误差 D，不对位置误差作差分，也不再除以 dt。
      * Settling 时参考速度为零，D 项为 -Kd * 实测沿路径速度，用于抑制超调。
      * 分别记录限幅前的 P、D 两项，方便判断修正来源；横向和航向仍使用 P。 */
-    motionState_.alongPositionCorrection = param_.alongKp * motionState_.alongError;
-    motionState_.alongSpeedCorrection = param_.alongKd * motionState_.alongSpeedError;
+    const bool settling = motionState_.phase == AutoMovePhase::Settling;
+    motionState_.activeAlongKp = settling ? param_.settlingAlongKp : param_.trackingAlongKp;
+    motionState_.activeAlongKd = settling ? param_.settlingAlongKd : param_.trackingAlongKd;
+    motionState_.alongPositionCorrection =
+        motionState_.activeAlongKp * motionState_.alongError;
+    motionState_.alongSpeedCorrection =
+        motionState_.activeAlongKd * motionState_.alongSpeedError;
     float alongCorrection = motionState_.alongPositionCorrection + motionState_.alongSpeedCorrection;
     float crossCorrection = param_.crossKp * motionState_.crossError;
     float yawVelocity = param_.yawKp * motionState_.yawError;

@@ -58,6 +58,8 @@ struct DebugAutoMoveState
     float positionError = 0.0f;
     float alongMeasuredSpeed = 0.0f;   ///< 实测沿路径速度 (m/s)。
     float alongSpeedError = 0.0f;      ///< 规划速度减实测沿路径速度 (m/s)。
+    float activeAlongKp = 0.0f;        ///< 当前阶段实际使用的沿路径位置 P 增益。
+    float activeAlongKd = 0.0f;        ///< 当前阶段实际使用的沿路径速度误差反馈增益。
     float alongPositionCorrection = 0.0f; ///< 限幅前的沿路径 P 修正速度 (m/s)。
     float alongSpeedCorrection = 0.0f; ///< 限幅前的沿路径 D 修正速度 (m/s)。
     float alongCorrection = 0.0f;
@@ -95,6 +97,7 @@ struct DebugLocalizationState
     DebugPoseFeedback currentPose = {};
     DebugPoseFeedback odometryPose = {};
     DebugPoseFeedback lidarPose = {};
+    LidarOriginState lidarOrigin = {}; ///< 初始旋转中心的世界位置及原点建立状态。
     DebugLidarProtocol lidarProtocol = {};
 };
 
