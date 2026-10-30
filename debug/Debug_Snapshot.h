@@ -1,17 +1,19 @@
 #pragma once
 
 /*
- * 调试专用数据镜像
+ * 调试入口，不参与任何控制计算。
  *
- * 该模块只保存一份便于 Keil Watch 查看 的副本，不参与任何控制计算。
- * 遥控器、VESC 和 DJI 反馈均通过已有的安全 getter 读取；IMU 由底盘任务
- * 更新后再复制。控制任务继续使用原来的局部变量和对象状态。
+ * Keil Watch 中只需添加 g_debug：
+ *   obj    指向底盘任务中的真实对象，展开即可实时查看全部成员；
+ *          舵向 PID 请改 g_steerPidTune；Stop 档下直接改 state_ 会被它每拍覆盖。
+ *   status 每 10 ms 更新一次的副本：航向换算为度，另含便于 CubeMonitor 画曲线的量。
+ *          修改 status 不会影响控制；调参使用 tune_params.h 中的 g_autoMoveTune、g_steerPidTune。
  */
 
 #include "Chassis.h"
 #include "auto_mode_controller.h"
-#include "chaohe_imu.h"
 #include "bsp_usb.h"
+#include "chaohe_imu.h"
 #include "pose_source.h"
 #include "remote_input.h"
 
@@ -31,102 +33,75 @@ struct DebugBodyVelocity
     float wzDegPerSec = 0.0f;
 };
 
-/** @brief Watch 中显示的自动运动目标，航向单位为度。 */
-struct DebugAutoMoveTarget
-{
-    float x = 0.0f;
-    float y = 0.0f;
-    float yawDeg = 0.0f;
-};
-
-/** @brief 自动运动调试镜像，角度和角速度均转换为度制。 */
-struct DebugAutoMoveState
-{
-    AutoMovePhase phase = AutoMovePhase::Idle;
-    DebugPose2D startPose = {};
-    DebugAutoMoveTarget target = {};
-    DebugPose2D referencePose = {};
-
-    float referenceDistance = 0.0f;
-    float referenceSpeed = 0.0f;
-    float planningTime = 0.0f;
-    TrapezoidalPhase planningPhase = TrapezoidalPhase::Idle;
-
-    float alongError = 0.0f;
-    float crossError = 0.0f;
-    float yawErrorDeg = 0.0f;
-    float positionError = 0.0f;
-    float alongMeasuredSpeed = 0.0f;   ///< 实测沿路径速度 (m/s)。
-    float alongSpeedError = 0.0f;      ///< 规划速度减实测沿路径速度 (m/s)。
-    float activeAlongKp = 0.0f;        ///< 当前阶段实际使用的沿路径位置 P 增益。
-    float activeAlongKd = 0.0f;        ///< 当前阶段实际使用的沿路径速度误差反馈增益。
-    float alongPositionCorrection = 0.0f; ///< 限幅前的沿路径 P 修正速度 (m/s)。
-    float alongSpeedCorrection = 0.0f; ///< 限幅前的沿路径 D 修正速度 (m/s)。
-    float alongCorrection = 0.0f;
-    float crossCorrection = 0.0f;
-    float worldVx = 0.0f;
-    float worldVy = 0.0f;
-    float settledTime = 0.0f;
-    DebugBodyVelocity velocity = {};
-};
-
-/** @brief 定位反馈的度制镜像，updateTick 为对应数据的更新时间。 */
+/** @brief 定位反馈的度制副本，updateTick 为对应数据的更新时间。 */
 struct DebugPoseFeedback
 {
     DebugPose2D pose = {};
-    PoseSource source = PoseSource::Odometry;
     uint32_t updateTick = 0U;
     bool valid = false;
 };
 
-/** @brief 雷达协议调试镜像，原始雷达中心与换算后的车体中心分开观察。 */
-struct DebugLidarProtocol
-{
-    DebugPose2D radarPose = {};
-    uint32_t receiveTick = 0U;
-    uint32_t frameCount = 0U;
-    uint32_t checksumErrorCount = 0U;
-    uint32_t invalidValueCount = 0U;
-    bool hasFrame = false;
-    uint8_t lastFrame[15] = {};
-};
-
-struct DebugLocalizationState
+/** @brief 定位状态；原点、协议计数等不需换算的量通过 obj.poseSourceManager 查看。 */
+struct DebugLocalizationStatus
 {
     PoseSource selectedSource = PoseSource::Odometry;
-    DebugPoseFeedback currentPose = {};
-    DebugPoseFeedback odometryPose = {};
-    DebugPoseFeedback lidarPose = {};
-    LidarOriginState lidarOrigin = {}; ///< 初始旋转中心的世界位置及原点建立状态。
-    DebugLidarProtocol lidarProtocol = {};
+    DebugPoseFeedback currentPose = {};    ///< 自动控制实际采用的车体中心位姿。
+    DebugPoseFeedback odometryPose = {};   ///< 雷达模式下不积分且保持无效。
+    DebugPoseFeedback lidarPose = {};      ///< 相对固定起点的旋转中心位姿。
+    DebugPose2D radarPose = {};            ///< 换算前的雷达中心原始位姿。
 };
 
-struct DebugSnapshotData
+/** @brief 自动运动中需要换算或画曲线的量；其余字段见 obj.autoMode。 */
+struct DebugAutoMoveStatus
 {
-    RemoteState remote = {};
-    Dji6020RxData steerFeedback[RobotConfig::WHEEL_COUNT] = {};
-    VescRxData wheelFeedback[RobotConfig::WHEEL_COUNT] = {};
-    ChaoheImuState imu = {}; ///< imu.yaw 已是度，来自 IMU 原始输出。
+    AutoMovePhase phase = AutoMovePhase::Idle;
+    uint32_t currentPointIndex = 0U;
+    DebugPose2D target = {};
+    DebugPose2D referencePose = {};
+    float yawErrorDeg = 0.0f;
+    float alongError = 0.0f;               ///< (m)
+    float crossError = 0.0f;               ///< (m)
+    float positionError = 0.0f;            ///< 距最终目标点的距离 (m)。
+    float referenceSpeed = 0.0f;           ///< 规划速度 (m/s)。
+    float alongMeasuredSpeed = 0.0f;       ///< 实测沿路径速度 (m/s)。
+    DebugBodyVelocity command = {};        ///< 交给底盘的车体目标速度。
+};
+
+struct DebugStatus
+{
     DebugBodyVelocity measuredVelocity = {};
     bool measuredVelocityValid = false;
-    BspUsbRxState usbReceive = {};
-    DebugLocalizationState localization = {};
-    AutoRouteState autoRoute = {};
-    DebugAutoMoveState autoMove = {};
+    BspUsbRxState usbReceive = {};         ///< USB 接收统计，原变量在匿名命名空间中不便查找。
+    DebugLocalizationStatus localization = {};
+    DebugAutoMoveStatus autoMove = {};
     uint32_t updateTick = 0U;
 };
 
-/* Keil Watch 中展开这个变量即可查看反馈、里程计和自动运动状态。 */
-extern DebugSnapshotData g_debugSnapshot;
+/** @brief 底盘任务中各对象的地址；任务启动前为空指针。 */
+struct DebugObjects
+{
+    Chassis *chassis = nullptr;
+    RemoteInput *remote = nullptr;
+    ChaoheImu *imu = nullptr;              ///< imu->state_.yaw 为度；雷达模式下不更新。
+    PoseSourceManager *poseSourceManager = nullptr;
+    AutoModeController *autoMode = nullptr;
+};
 
-/* 更新序号：奇数表示正在更新，偶数表示本次更新已完成。 */
-extern volatile uint32_t g_debugSnapshotSequence;
+struct DebugRoot
+{
+    DebugObjects obj = {};
+    DebugStatus status = {};
+};
+
+extern DebugRoot g_debug;
+
+/* status 更新序号：奇数表示正在更新，偶数表示本次更新已完成。 */
+extern volatile uint32_t g_debugSequence;
 
 namespace DebugSnapshot
 {
     constexpr uint32_t UPDATE_PERIOD_MS = 10U;
 
-    void Update(const RemoteState &remote, const Chassis &chassis,
-                const ChaoheImuState &imu, const PoseSourceManager &poseSourceManager,
+    void Update(const Chassis &chassis, const PoseSourceManager &poseSourceManager,
                 const AutoModeController &autoMode);
 }

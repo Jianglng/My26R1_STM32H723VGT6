@@ -2882,6 +2882,16 @@
               <FileType>5</FileType>
               <FilePath>../robot_config/robot_config.h</FilePath>
             </File>
+            <File>
+              <FileName>tune_params.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>../robot_config/tune_params.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>tune_params.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../robot_config/tune_params.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

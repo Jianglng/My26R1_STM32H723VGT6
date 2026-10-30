@@ -1,6 +1,7 @@
 #pragma once
 
 #include "auto_move.h"
+#include "auto_move_config.h"
 #include "auto_route_config.h"
 
 /** @brief 自动航点任务的运行状态，供任务和调试窗口观察。 */
@@ -21,8 +22,12 @@ struct AutoRouteState
 class AutoModeController
 {
 public:
-    /** @brief 取消当前自动运动，并绑定指定定位来源的参数，回到等待启动状态。 */
-    void Reset(PoseSource poseSource);
+    /**
+     * @brief 取消当前自动运动，绑定定位来源并应用一组参数，回到等待启动状态。
+     * @param tune 角度为度制的参数，在此换算为 rad 后校验。
+     * @return 参数有效并已应用时返回 true；无效时保留上一组有效参数并返回 false。
+     */
+    bool Reset(PoseSource poseSource, const AutoMoveTune &tune);
 
     /**
      * @brief 更新一次自动模式并返回车体目标速度。

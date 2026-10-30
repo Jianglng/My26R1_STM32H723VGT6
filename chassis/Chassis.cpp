@@ -13,7 +13,7 @@ void Chassis::Init()
     {
         steerAnglePid_[i].Init(RobotConfig::STEER_ANGLE, dwt_);
         steerSpeedPid_[i].Init(RobotConfig::STEER_SPEED, dwt_);
-        /* VESC 在 FDCAN1，6020 在 FDCAN3。ID 只来自 RobotConfig。 */
+        /* VESC 在 FDCAN1，6020 在 FDCAN3*/
         wheelMotors_[i].Init(&hfdcan1, RobotConfig::VESC_NODE_ID[i]);
         steerMotors_[i].Init(RobotConfig::DJI_MOTOR_ID[i]);
     }
@@ -83,21 +83,22 @@ void Chassis::UpdateControl()
     RunWheelRpm(command, steerFeedback_);
 }
 
-void Chassis::CopyFeedbackForDebug(
-    Dji6020RxData steerFeedback[RobotConfig::WHEEL_COUNT],
-    VescRxData wheelFeedback[RobotConfig::WHEEL_COUNT]) const
+bool Chassis::ApplySteerPidParam(const PidParam &angle, const PidParam &speed)
 {
-    if (steerFeedback == nullptr || wheelFeedback == nullptr)
+    /* 只在停机时换参数，避免行进中增益突变。 */
+    if (enabled_ ||
+        !PidParamValid(angle, RobotConfig::STEER_ANGLE_MAX) ||
+        !PidParamValid(speed, RobotConfig::STEER_SPEED_MAX))
     {
-        return;
+        return false;
     }
 
     for (uint32_t i = 0; i < RobotConfig::WHEEL_COUNT; ++i)
     {
-        /* 两类 GetRxData() 都会在内部关中断后复制，调试层不直接碰内部状态。 */
-        steerFeedback[i] = steerMotors_[i].GetRxData();
-        wheelFeedback[i] = wheelMotors_[i].GetRxData();
+        steerAnglePid_[i].Init(angle, dwt_);
+        steerSpeedPid_[i].Init(speed, dwt_);
     }
+    return true;
 }
 
 void Chassis::StopMotors()

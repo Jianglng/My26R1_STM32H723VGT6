@@ -210,6 +210,8 @@ virtualFolder:
         - path: ../robot_config/auto_route_config.h
         - path: ../robot_config/localization_config.h
         - path: ../robot_config/robot_config.h
+        - path: ../robot_config/tune_params.cpp
+        - path: ../robot_config/tune_params.h
       folders: []
     - name: debug
       files:

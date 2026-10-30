@@ -42,6 +42,9 @@ struct AutoMoveParam
     float settleDuration;              ///< 连续满足到达条件的时间 (s)。
 };
 
+/** @brief 参数均为有限值且满足正负和上下限要求时返回 true；Start() 使用同一规则。 */
+bool AutoMoveParamValid(const AutoMoveParam &param);
+
 /** @brief 单点运动的当前阶段。 */
 enum class AutoMovePhase : uint8_t
 {

@@ -15,20 +15,24 @@ void ChassisOdometry::Reset()
 {
     pose_ = ChassisPose2D{};
     lastImuYawDeg_ = 0.0f;
+    imuYawInitialized_ = false;
     initialized_ = false;
     valid_ = false;
     feedbackLost_ = false;
 }
 
-void ChassisOdometry::Update(float bodyVx, float bodyVy, float imuYawDeg,
-                             float dt, bool feedbackValid)
+void ChassisOdometry::Update(const ChassisBodyVelocity &measuredBodyVelocity,
+                             float imuYawDeg, bool imuOnline, float dt, bool wheelFeedbackValid)
 {
     if (feedbackLost_)
     {
         return;
     }
 
-    if (!feedbackValid || !isfinite(bodyVx) || !isfinite(bodyVy) || !isfinite(imuYawDeg))
+    const float bodyVx = measuredBodyVelocity.vx;
+    const float bodyVy = measuredBodyVelocity.vy;
+    const float bodyWz = measuredBodyVelocity.wz;
+    if (!wheelFeedbackValid || !isfinite(bodyVx) || !isfinite(bodyVy) || !isfinite(bodyWz))
     {
         if (initialized_)
         {
@@ -38,10 +42,15 @@ void ChassisOdometry::Update(float bodyVx, float bodyVy, float imuYawDeg,
         return;
     }
 
-    if (!initialized_)//若尚未初始化，则初始化
+    const bool imuYawValid = imuOnline && isfinite(imuYawDeg);
+    if (!initialized_)
     {
-        /* 初次收到有效反馈时，只记录 IMU 角度，不积分未知的先前运动。 */
-        lastImuYawDeg_ = imuYawDeg;
+        /* 首帧轮速反馈有效即建立原点；IMU 可随后上线，不积分未知的先前运动。 */
+        if (imuYawValid)
+        {
+            lastImuYawDeg_ = imuYawDeg;
+        }
+        imuYawInitialized_ = imuYawValid;
         initialized_ = true;
         valid_ = true;
         return;
@@ -54,7 +63,18 @@ void ChassisOdometry::Update(float bodyVx, float bodyVy, float imuYawDeg,
         return;
     }
 
-    const float deltaYaw = MathUtils::WrapPeriodicError(imuYawDeg - lastImuYawDeg_, 360.0f) * DEG_TO_RAD;
+    /* IMU 离线时由轮速角速度积分；重新上线的首帧只重建 IMU 角度基准。 */
+    float deltaYaw = bodyWz * dt;
+    if (imuYawValid)
+    {
+        if (imuYawInitialized_)
+        {
+            deltaYaw = MathUtils::WrapPeriodicError(imuYawDeg - lastImuYawDeg_, 360.0f) * DEG_TO_RAD;
+        }
+        lastImuYawDeg_ = imuYawDeg;
+    }
+    imuYawInitialized_ = imuYawValid;
+
     const float middleYaw = pose_.yaw + 0.5f * deltaYaw;
     const float cosYaw = cosf(middleYaw);
     const float sinYaw = sinf(middleYaw);
@@ -62,6 +82,5 @@ void ChassisOdometry::Update(float bodyVx, float bodyVy, float imuYawDeg,
     pose_.x += (bodyVx * cosYaw - bodyVy * sinYaw) * dt;
     pose_.y += (bodyVx * sinYaw + bodyVy * cosYaw) * dt;
     pose_.yaw += deltaYaw;
-    lastImuYawDeg_ = imuYawDeg;
     valid_ = true;
 }

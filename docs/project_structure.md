@@ -133,22 +133,25 @@ centerWorldY = radarY - 0.4636f * sinf(yaw) - 0.0160f * cosf(yaw);
 
 ## Watch 入口
 
-统一展开 `g_debugSnapshot`：
+Watch 中添加以下三个全局变量：
 
-| 变量 | 含义 |
+| 变量 | 用途 |
 |---|---|
-| `usbReceive` | USB 连接、收包、缓存积压和溢出统计 |
-| `localization.selectedSource` | 当前选择的定位来源 |
-| `localization.currentPose` | 自动控制实际采用的车体中心位姿、时间和有效性 |
-| `localization.odometryPose` | 里程计反馈；雷达模式下不积分且保持无效 |
-| `localization.lidarPose` | 相对固定起点的旋转中心反馈；yaw 为世界航向 |
-| `localization.lidarOrigin` | initialized 及初始旋转中心世界坐标 initialCenterWorldX/Y |
-| `localization.lidarProtocol` | 原始雷达中心位姿、有效帧计数、校验错误及最后一帧 |
-| `autoRoute.poseSource` | 自动航点任务绑定的参数来源 |
-| `autoMove` | 梯形参考、位置和速度反馈、输出与运动阶段 |
-| `measuredVelocity` | 底盘实测车体速度 |
+| `g_debug.obj` | 指向底盘任务中真实对象的指针，展开可实时查看全部成员；任务启动前为空 |
+| `g_debug.status` | 每 10 ms 更新的度制副本：各定位位姿、雷达原始位姿、自动运动误差与速度、USB 接收统计 |
+| `g_autoMoveTune` | 自动运动参数（度制），可修改 |
+| `g_steerPidTune` | 舵向串级 PID 参数，可修改 |
 
-旧的 `g_usb_pose_debug`、`g_usb_rx_debug` 由上述镜像替代。Watch 中 `yawDeg` 为度，`wzDegPerSec` 为 °/s。
+常用路径：雷达原点 `g_debug.obj.poseSourceManager->lidarLocalization_.lidarOrigin_`，协议计数 `...lidarLocalization_.lidarProtocol_.lidarProtocolState_`，航点进度 `g_debug.obj.autoMode->routeState_`，舵向 PID `g_debug.obj.chassis->steerAnglePid_[i].state_`。`status` 中 `yawDeg` 为度，`wzDegPerSec` 为 °/s；修改 `status` 不影响控制。
+
+## 运行时调参
+
+`robot_config/tune_params.cpp` 中的两个调参区上电时取 constexpr 默认值，调试器修改的是 RAM 副本，复位或断电后恢复默认。
+
+- `g_autoMoveTune.odometry` / `lidar`：修改后拨动左拨杆，切档时应用到当前来源；行进中修改不生效。`applyCount`、`rejectCount`、`lastApplyValid` 和 `applied` 回显结果，参数无效时保留上一组有效参数。`maxOutputVelocity` 不得超过 `AutoMoveConfig::MAX_TUNE_OUTPUT_VELOCITY`。
+- `g_steerPidTune`：仅在 Stop 档每拍写入三个轮子，下档修改即时生效，中档和上档保持不变。`maxOut` 不得超过 `robot_config.h` 中的默认上限。
+
+调好的数值须手动抄回 `auto_move_config.h` 和 `robot_config.h` 的常量。
 
 ## 验证与 CubeMX 再生成
 

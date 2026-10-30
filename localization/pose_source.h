@@ -13,10 +13,10 @@ public:
     void Reset(PoseSource source);
     /** @brief 所有模式下均可接收雷达，便于停机时观察，不改变选定来源。 */
     void UpdateLidar();
-    /** @brief 仅选择里程计时积分；IMU 航向不进入雷达定位。 */
+    /** @brief 仅选择里程计时积分，IMU 离线时使用轮速角速度；不影响雷达定位。 */
     void UpdateOdometry(const ChassisBodyVelocity &measuredBodyVelocity,
-                        float imuYawDeg, float dt, bool odometryFeedbackValid,
-                        uint32_t nowTick);
+                        float imuYawDeg, bool imuOnline, float dt,
+                        bool wheelFeedbackValid, uint32_t nowTick);
 
     bool GetOdometryPose(PoseFeedback &feedback) const;
     bool GetLidarPose(PoseFeedback &feedback) const;

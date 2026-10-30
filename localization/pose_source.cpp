@@ -15,16 +15,15 @@ void PoseSourceManager::UpdateLidar()
 }
 
 void PoseSourceManager::UpdateOdometry(const ChassisBodyVelocity &measuredBodyVelocity,
-                                      float imuYawDeg, float dt, bool odometryFeedbackValid,
-                                      uint32_t nowTick)
+                                      float imuYawDeg, bool imuOnline, float dt,
+                                      bool wheelFeedbackValid, uint32_t nowTick)
 {
     if (selectedSource_ != PoseSource::Odometry)
     {
         return;
     }
 
-    chassisOdometry_.Update(measuredBodyVelocity.vx, measuredBodyVelocity.vy,
-                            imuYawDeg, dt, odometryFeedbackValid);
+    chassisOdometry_.Update(measuredBodyVelocity, imuYawDeg, imuOnline, dt, wheelFeedbackValid);
     odometryFeedback_.pose = chassisOdometry_.Pose();
     odometryFeedback_.valid = chassisOdometry_.Valid();
     if (odometryFeedback_.valid)

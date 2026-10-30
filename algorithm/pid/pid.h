@@ -27,6 +27,12 @@ struct PidParam
 };
 
 /**
+ * @brief 参数均为有限值、增益和限幅非负且输出限幅不超过 maxOutLimit 时返回 true。
+ * @param maxOutLimit 允许的最大输出限幅，用于防止调参时误填过大的值。
+ */
+bool PidParamValid(const PidParam &param, float maxOutLimit);
+
+/**
  * @brief 单路 PID 的参数和运行状态。
  * @note 调试时 Watch 对象的 state_。dt 单位是毫秒，1 kHz 时应接近 1。
  */

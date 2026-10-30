@@ -1,9 +1,11 @@
 #include "auto_mode_controller.h"
 
-#include "auto_move_config.h"
 #include "math_utils.h"
 
 #include <math.h>
+
+/* 两个结构体字段一一对应，增删字段时须同时修改，并同步 ToAutoMoveParam()。 */
+static_assert(sizeof(AutoMoveTune) == sizeof(AutoMoveParam), "AutoMoveTune 与 AutoMoveParam 字段数不一致");
 
 namespace
 {
@@ -14,17 +16,52 @@ namespace
                hypotf(velocity.vx, velocity.vy) <= autoMoveParam.speedTolerance &&
                fabsf(velocity.wz) <= autoMoveParam.yawSpeedTolerance;
     }
+
+    /* 度制配置换算为控制器使用的 rad 参数，其余字段原样复制。 */
+    AutoMoveParam ToAutoMoveParam(const AutoMoveTune &tune)
+    {
+        AutoMoveParam param = {};
+        param.maxVelocity = tune.maxVelocity;
+        param.acceleration = tune.acceleration;
+        param.deceleration = tune.deceleration;
+        param.trackingAlongKp = tune.trackingAlongKp;
+        param.trackingAlongKd = tune.trackingAlongKd;
+        param.settlingAlongKp = tune.settlingAlongKp;
+        param.settlingAlongKd = tune.settlingAlongKd;
+        param.crossKp = tune.crossKp;
+        param.yawKp = tune.yawKp;
+        param.maxCorrectionVelocity = tune.maxCorrectionVelocity;
+        param.maxOutputVelocity = tune.maxOutputVelocity;
+        param.maxYawVelocity = MathUtils::DegToRad(tune.maxYawVelocityDegPerSec);
+        param.yawAcceleration = MathUtils::DegToRad(tune.yawAccelerationDegPerSec2);
+        param.positionTolerance = tune.positionTolerance;
+        param.yawTolerance = MathUtils::DegToRad(tune.yawToleranceDeg);
+        param.speedTolerance = tune.speedTolerance;
+        param.yawSpeedTolerance = MathUtils::DegToRad(tune.yawSpeedToleranceDegPerSec);
+        param.settleDuration = tune.settleDuration;
+        return param;
+    }
 }
 
-void AutoModeController::Reset(PoseSource poseSource)
+bool AutoModeController::Reset(PoseSource poseSource, const AutoMoveTune &tune)
 {
     poseSource_ = poseSource;
-    autoMoveParam_ = AutoMoveConfig::ForSource(poseSource_);
+
+    /* 在 AutoMove 的通用校验之外再限制输出速度，防止调试器中误填过大的值。 */
+    const AutoMoveParam param = ToAutoMoveParam(tune);
+    const bool paramValid = AutoMoveParamValid(param) &&
+                            param.maxOutputVelocity <= AutoMoveConfig::MAX_TUNE_OUTPUT_VELOCITY;
+    if (paramValid)
+    {
+        autoMoveParam_ = param;
+    }
+
     autoMove_.Reset();
     routeState_ = AutoRouteState{};
     routeState_.poseSource = poseSource_;
     routeState_.pointCount = AutoRouteConfig::POINT_COUNT;
     routeState_.finished = (AutoRouteConfig::POINT_COUNT == 0U);
+    return paramValid;
 }
 
 bool AutoModeController::Update(const ChassisPose2D &currentPose,

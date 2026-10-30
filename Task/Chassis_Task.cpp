@@ -10,10 +10,29 @@
 #include "manual_mode_controller.h"
 #include "pose_source.h"
 #include "remote_input.h"
+#include "tune_params.h"
 #include "usart.h"
 
 namespace
 {
+    /* 复位自动任务并应用当前来源的调参值，结果回显到 g_autoMoveTune。 */
+    void ResetAutoMode(AutoModeController &autoMode, PoseSource source)
+    {
+        const AutoMoveTune &tune = (source == PoseSource::Lidar) ? g_autoMoveTune.lidar
+                                                                 : g_autoMoveTune.odometry;
+        const bool applied = autoMode.Reset(source, tune);
+        g_autoMoveTune.lastApplyValid = applied;
+        if (applied)
+        {
+            g_autoMoveTune.applied = tune;
+            ++g_autoMoveTune.applyCount;
+        }
+        else
+        {
+            ++g_autoMoveTune.rejectCount;
+        }
+    }
+
     enum class ChassisMode : uint8_t
     {
         Stop,
@@ -51,10 +70,17 @@ extern "C" void StartChassisTask(void *argument)
     ChassisMode lastMode = ChassisMode::Stop;
     uint32_t lastDebugSnapshotTick = 0U;
 
+    /* 只登记地址供调试器展开，对象仍归本任务所有。 */
+    g_debug.obj.chassis = &chassis;
+    g_debug.obj.remote = &remote;
+    g_debug.obj.imu = &imu;
+    g_debug.obj.poseSourceManager = &poseSourceManager;
+    g_debug.obj.autoMode = &autoMode;
+
     chassis.Init();
     remote.Init(&huart5);
     poseSourceManager.Reset(LocalizationConfig::POSE_SOURCE);
-    autoMode.Reset(poseSourceManager.Source());
+    ResetAutoMode(autoMode, poseSourceManager.Source());
     if (poseSourceManager.Source() == PoseSource::Odometry)
     {
         /* IMU 只属于里程计定位，雷达模式不启动 IMU 接收 */
@@ -73,8 +99,9 @@ extern "C" void StartChassisTask(void *argument)
         {
             imu.Update();
             const ChaoheImuState &odometryImuState = imu.State();
-            const bool odometryFeedbackValid = chassis.HasMeasuredVelocity() && odometryImuState.online;
-            poseSourceManager.UpdateOdometry(measuredBodyVelocity, odometryImuState.yaw, dt, odometryFeedbackValid, HAL_GetTick());
+            /* IMU 离线不阻断里程计，由定位模块切换为轮速航向积分。 */
+            poseSourceManager.UpdateOdometry(measuredBodyVelocity, odometryImuState.yaw,
+                                            odometryImuState.online, dt, chassis.HasMeasuredVelocity(), HAL_GetTick());
         }
 
         /* USB 非阻塞、限量处理；所有模式下都可观察雷达，不另建接收任务。 */
@@ -87,8 +114,9 @@ extern "C" void StartChassisTask(void *argument)
         const ChassisMode mode = SelectChassisMode(state);
         if (mode != lastMode)
         {
-            /* 新切入自动档重新开始航点任务；退出时取消当前任务。 */
-            autoMode.Reset(poseSourceManager.Source());
+            /* 新切入自动档重新开始航点任务；退出时取消当前任务。
+             * 切档同时应用 g_autoMoveTune，行进中修改不生效。 */
+            ResetAutoMode(autoMode, poseSourceManager.Source());
             lastMode = mode;
         }
 
@@ -101,8 +129,7 @@ extern "C" void StartChassisTask(void *argument)
             case ChassisMode::Auto:
             {
                 ChassisBodyVelocity autoVelocity = {};
-                if (autoMode.Update(currentPoseFeedback.pose, measuredBodyVelocity, dt,
-                                    feedbackValid, autoVelocity))
+                if (autoMode.Update(currentPoseFeedback.pose, measuredBodyVelocity, dt, feedbackValid, autoVelocity))
                 {
                     chassis.SetVelocity(autoVelocity);
                 }
@@ -116,6 +143,9 @@ extern "C" void StartChassisTask(void *argument)
             case ChassisMode::Stop:
             default:
                 chassis.Stop();
+                /* 停机时 PID 每拍都会清零积分，此时换参数与原有行为一致。 */
+                g_steerPidTune.lastApplyValid =
+                    chassis.ApplySteerPidParam(g_steerPidTune.angle, g_steerPidTune.speed);
                 break;
         }
         chassis.UpdateControl();
@@ -124,7 +154,7 @@ extern "C" void StartChassisTask(void *argument)
         const uint32_t now = HAL_GetTick();
         if ((now - lastDebugSnapshotTick) >= DebugSnapshot::UPDATE_PERIOD_MS)
         {
-            DebugSnapshot::Update(state, chassis, imu.State(), poseSourceManager, autoMode);
+            DebugSnapshot::Update(chassis, poseSourceManager, autoMode);
             lastDebugSnapshotTick = now;
         }
         osDelay(1);

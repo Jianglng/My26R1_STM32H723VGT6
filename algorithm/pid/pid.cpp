@@ -13,6 +13,16 @@ namespace
     constexpr float DT_DEFAULT_MS = 1.0f; // 与参考工程底盘环使用的 dt=1 一致。
 }
 
+bool PidParamValid(const PidParam &param, float maxOutLimit)
+{
+    return isfinite(param.kp) && param.kp >= 0.0f &&
+           isfinite(param.ki) && param.ki >= 0.0f &&
+           isfinite(param.kd) && param.kd >= 0.0f &&
+           isfinite(param.maxOut) && param.maxOut > 0.0f && param.maxOut <= maxOutLimit &&
+           isfinite(param.integralLimit) && param.integralLimit >= 0.0f &&
+           isfinite(param.deadband) && param.deadband >= 0.0f;
+}
+
 
 Pid::Pid()
     : timer_(nullptr)

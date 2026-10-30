@@ -14,27 +14,6 @@ namespace
         return isfinite(pose.x) && isfinite(pose.y) && isfinite(pose.yaw);
     }
 
-    bool ParamValid(const AutoMoveParam &param)
-    {
-        return isfinite(param.maxVelocity) && param.maxVelocity > 0.0f &&
-               isfinite(param.acceleration) && param.acceleration > 0.0f &&
-               isfinite(param.deceleration) && param.deceleration > 0.0f &&
-               isfinite(param.trackingAlongKp) && param.trackingAlongKp >= 0.0f &&
-               isfinite(param.trackingAlongKd) && param.trackingAlongKd >= 0.0f &&
-               isfinite(param.settlingAlongKp) && param.settlingAlongKp >= 0.0f &&
-               isfinite(param.settlingAlongKd) && param.settlingAlongKd >= 0.0f &&
-               isfinite(param.crossKp) && param.crossKp >= 0.0f &&
-               isfinite(param.yawKp) && param.yawKp >= 0.0f &&
-               isfinite(param.maxCorrectionVelocity) && param.maxCorrectionVelocity > 0.0f &&
-               isfinite(param.maxOutputVelocity) && param.maxOutputVelocity >= param.maxVelocity &&
-               isfinite(param.maxYawVelocity) && param.maxYawVelocity > 0.0f &&
-               isfinite(param.yawAcceleration) && param.yawAcceleration > 0.0f &&
-               isfinite(param.positionTolerance) && param.positionTolerance > 0.0f &&
-               isfinite(param.yawTolerance) && param.yawTolerance > 0.0f && param.yawTolerance <= PI &&
-               isfinite(param.speedTolerance) && param.speedTolerance > 0.0f &&
-               isfinite(param.yawSpeedTolerance) && param.yawSpeedTolerance > 0.0f &&
-               isfinite(param.settleDuration) && param.settleDuration > 0.0f;
-    }
 //限制二维向量的合成大小，同时保持方向不变
     void LimitVector(float &x, float &y, float limit)
     {
@@ -46,6 +25,28 @@ namespace
             y *= scale;
         }
     }
+}
+
+bool AutoMoveParamValid(const AutoMoveParam &param)
+{
+    return isfinite(param.maxVelocity) && param.maxVelocity > 0.0f &&
+           isfinite(param.acceleration) && param.acceleration > 0.0f &&
+           isfinite(param.deceleration) && param.deceleration > 0.0f &&
+           isfinite(param.trackingAlongKp) && param.trackingAlongKp >= 0.0f &&
+           isfinite(param.trackingAlongKd) && param.trackingAlongKd >= 0.0f &&
+           isfinite(param.settlingAlongKp) && param.settlingAlongKp >= 0.0f &&
+           isfinite(param.settlingAlongKd) && param.settlingAlongKd >= 0.0f &&
+           isfinite(param.crossKp) && param.crossKp >= 0.0f &&
+           isfinite(param.yawKp) && param.yawKp >= 0.0f &&
+           isfinite(param.maxCorrectionVelocity) && param.maxCorrectionVelocity > 0.0f &&
+           isfinite(param.maxOutputVelocity) && param.maxOutputVelocity >= param.maxVelocity &&
+           isfinite(param.maxYawVelocity) && param.maxYawVelocity > 0.0f &&
+           isfinite(param.yawAcceleration) && param.yawAcceleration > 0.0f &&
+           isfinite(param.positionTolerance) && param.positionTolerance > 0.0f &&
+           isfinite(param.yawTolerance) && param.yawTolerance > 0.0f && param.yawTolerance <= PI &&
+           isfinite(param.speedTolerance) && param.speedTolerance > 0.0f &&
+           isfinite(param.yawSpeedTolerance) && param.yawSpeedTolerance > 0.0f &&
+           isfinite(param.settleDuration) && param.settleDuration > 0.0f;
 }
 
 void AutoMove::Reset()
@@ -64,7 +65,7 @@ bool AutoMove::Start(const ChassisPose2D &currentPose, const AutoMoveTarget &tar
     Reset();
 
     /* 检查位姿、目标和控制参数，失败时进入故障并保持零输出。 */
-    if (!PoseValid(currentPose) || !isfinite(target.x) || !isfinite(target.y) || !isfinite(target.yaw) || !ParamValid(param))
+    if (!PoseValid(currentPose) || !isfinite(target.x) || !isfinite(target.y) || !isfinite(target.yaw) || !AutoMoveParamValid(param))
     {
         SetFault();
         return false;

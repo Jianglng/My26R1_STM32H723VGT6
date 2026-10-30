@@ -34,7 +34,7 @@ enum class PoseSource : uint8_t
 struct PoseFeedback
 {
     ChassisPose2D pose = {};
-    PoseSource source = PoseSource::Odometry;
+    PoseSource source = PoseSource::Lidar;
     uint32_t updateTick = 0U;           ///< 里程计更新或雷达完整帧接收时间 (ms)。
     bool valid = false;
 };

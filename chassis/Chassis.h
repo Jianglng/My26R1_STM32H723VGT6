@@ -36,12 +36,11 @@ public:
     DwtTimer &Timer() { return dwt_; }
 
     /**
-     * @brief 复制一份仅供调试观察的电机反馈。
-     * @note 不参与控制；底层 getter 自己负责与 CAN 接收中断隔离。
+     * @brief 把一组参数写入三个轮子的舵向串级 PID，并清零积分。
+     * @return 底盘处于 Stop() 状态且参数有效时返回 true；运行中或参数无效时不修改并返回 false。
+     * @note 输出限幅不得超过 RobotConfig 中的默认上限，只允许调小。
      */
-    void CopyFeedbackForDebug(
-        Dji6020RxData steerFeedback[RobotConfig::WHEEL_COUNT],
-        VescRxData wheelFeedback[RobotConfig::WHEEL_COUNT]) const;
+    bool ApplySteerPidParam(const PidParam &angle, const PidParam &speed);
 
     /**
      * @brief 跑一拍：读取反馈并正解速度，再逆解目标、控制舵向和轮速。
