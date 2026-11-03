@@ -1,6 +1,6 @@
 # My26R1 嵌入式 C++ 编码规范
 
-本规范适用于本工程的应用代码（`Task/`、`chassis/`、`control/`、`localization/`、`algorithm/`、`protocol/`、`bsp/`、`common/`、`robot_config/`、`debug/`）。CubeMX 生成的 `Core/`、`USB_DEVICE/`、`Drivers/`、`Middlewares/` 以及第三方源码（如 `protocol/imu/hipnuc_*`）保持原样，不按本规范改写。
+本规范适用于本工程的应用代码（`task/`、`chassis/`、`control/`、`localization/`、`algorithm/`、`protocol/`、`bsp/`、`common/`、`robot_config/`、`debug/`）。CubeMX 生成的 `Core/`、`USB_DEVICE/`、`Drivers/`、`Middlewares/` 以及第三方源码（如 `protocol/imu/hipnuc_*`）保持原样，不按本规范改写。
 
 参考来源：Google C++ 风格指南（中文版）、浙大 Hello World 嵌入式编程风格指南、getiot C 语言编程规范（华为规范整理版），以及 MISRA C/C++ 的安全思路。各条规则的出处和本工程的取舍见文末附录。
 
@@ -21,7 +21,7 @@
 ### 1.1 分层与依赖方向（必须）
 
 ```text
-Task                    任务调度：拥有对象、决定调用顺序
+task                    任务调度：拥有对象、决定调用顺序
   ↓
 chassis / control / localization     业务层
   ↓
@@ -91,8 +91,8 @@ HAL / CMSIS / FreeRTOS
 ```cpp
 /**
  * @file    chassis_odometry.h
- * @brief   用实测车体速度和 IMU 航向累计底盘相对位姿。
- * @note    不读取传感器，不参与电机控制；调用者保证 1 kHz 周期调用。
+ * @brief   用实测车体速度和 IMU 航向累计底盘相对位姿
+ * @note    不读取传感器，不参与电机控制；调用者保证 1 kHz 周期调用
  */
 ```
 
@@ -174,7 +174,7 @@ SpacesBeforeTrailingComments: 2
 ### 5.1 原则（必须）
 
 - 注释解释“为什么”和“约束条件”，不复述代码在做什么。好的命名能省掉大部分注释。
-- 注释语言统一用中文，专有名词保留英文。
+- 注释语言统一用中文，专有名词保留英文；中文代码注释不加句号，必要时分行或使用逗号、分号。
 - 修改代码时同步修改周边注释。过时的注释比没有注释更糟。
 - 注释放在代码上方或行尾，不放在下方。上方注释与前面的代码之间空一行。
 - `//` 和 `/*` 后面空一格。
@@ -186,12 +186,12 @@ SpacesBeforeTrailingComments: 2
 
 ```cpp
 /**
- * @brief  按实际时间间隔推进一维梯形规划。
- * @param  dt  距上次更新的时间间隔 (s)，必须有限且大于 0。
- * @return dt 无效或规划器处于 Idle 时返回 false，并保持当前输出。
- * @note   只在底盘任务中调用，不可重入。
+ * @brief  按实际时间间隔推进一维梯形规划
+ * @param  dt  距上次更新的时间间隔 (s)，由任务层保证有限且大于 0
+ * @note   Idle 时保持输出，内部不重复校验 dt
+ * @note   只在底盘任务中调用，不可重入
  */
-bool Update(float dt);
+void Update(float dt);
 ```
 
 简单的取值函数（`Pose()`、`Valid()`）可以不写。
@@ -223,7 +223,9 @@ bool Update(float dt);
 
 ### 6.3 参数检查（必须）
 
-- 对外接口检查入参（空指针、范围、`isfinite`）；模块内部函数由调用者保证。
+- 在真实输入边界检查一次：协议解码检查报文和数值，在线调参检查候选配置，任务层检查实际 `dt`。公共接口不等于外部输入边界，内部算法的公开接口也可由调用者保证输入有效。
+- 内部算法不重复检查已经验证的位姿、实测速度、`dt` 和乘加中间结果；头文件须说明调用约束。送入底盘的速度，以及转为电流整数前的输出保留最终非有限值检查。
+- `constexpr` 配置用 `static_assert` 验证，不在每次启动运动时执行运行期检查。
 - 同一类校验只写一份，其他地方调用它（例如 `PidParamValid()`）。
 
 ## 7. 类与结构体
@@ -293,7 +295,7 @@ bool Update(float dt);
 
 ### 9.3 共享数据与并发（必须）
 
-- 中断与任务共享的变量必须声明为 `volatile`，并且读写要原子化：单个对齐的 32 位以内变量可以直接读写，结构体和多字段数据必须在临界区中拷贝。
+- 中断与任务共享的发布标志、索引、计数器使用 `volatile`；多字段数据在临界区中取快照。普通缓冲区由唯一中断生产者写入，经内存屏障发布，任务在临界区内读取，不逐字节添加 `volatile` 或进行重复校验。
 - 临界区要短，只包含拷贝操作，不在临界区内调用 HAL 或 FreeRTOS API。
 - 统一使用一组临界区封装（例如 `bsp/bsp_critical.h` 中的 `CriticalSection` RAII 类），不在各模块里重复写 `__get_PRIMASK()` / `__disable_irq()` / `__set_PRIMASK()`。
 - 多个任务共享的数据，用 FreeRTOS 队列或互斥量保护。明确每份数据的唯一写者。
@@ -316,7 +318,7 @@ bool Update(float dt);
 
 - 遥控离线、通信超时、反馈无效、参数非法、计算结果非有限值，都必须导向零输出。
 - 每个外部输入源都要有在线判定和超时时间，超时时间定义成常量。
-- 启用独立看门狗（IWDG），在控制主循环中喂狗。主循环卡死时由硬件复位。
+- 原则上启用独立看门狗（IWDG），在控制主循环中喂狗。主循环卡死时由硬件复位。当前工程按用户 2026-10-30 的明确要求暂缓添加 IWDG，本轮不配置、不喂狗。
 
 ### 10.2 断言（建议）
 
@@ -337,6 +339,8 @@ bool Update(float dt);
 ## 12. 构建与版本管理
 
 ### 12.1 编译（必须）
+
+- 应用统一使用 C++14，默认参数通过具名字段赋值的 `constexpr` 构造函数定义，避免同类型聚合字段顺序出错。
 
 - 打开编译器的高告警级别（AC6：`-Wall -Wextra`，Keil 中 Warnings 选 `All Warnings`），新代码零告警。
 - 告警通过修改代码消除，不通过降低告警级别消除。

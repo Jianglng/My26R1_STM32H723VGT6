@@ -1,62 +1,43 @@
+/**
+ * @file chassis_kinematics.h
+ * @brief 三舵轮正逆解，车体 +x 向前、+y 向左、逆时针为正
+ */
 #pragma once
 
 #include <stdint.h>
 
-#include "robot_config.h"
 #include "motion_types.h"
 
-/**
- * @brief 三舵轮底盘运动学。
- *
- * 车体坐标：+x 向前，+y 向左，+wz 俯视逆时针。
- * 轮序与 RobotConfig 的电机 ID 数组一致：[0] 前轮，[1] 左轮，[2] 右轮。
- * 轮数、零点和轮心坐标只在 RobotConfig 里，本层直接引用。
- *
- * 三轮按等边三角形布置，前轮在 +x 轴上。本层只做正逆解，
- * 不读遥控器，不调用 PID，也不发送 CAN。
- * 车体速度低于停止阈值时，轮速为 0，舵向保持上一拍。
- */
+/** @brief 三轮对称布置，轮心坐标和为零，几何数据由配置保证有效 */
+struct ChassisGeometry
+{
+    static constexpr uint32_t WHEEL_COUNT = 3U;
+    float wheelX[WHEEL_COUNT];  // m
+    float wheelY[WHEEL_COUNT];  // m
+    float zeroEncoder[WHEEL_COUNT];
+    float wheelDiameter;  // m
+    float gearRatio;
+    float encoderRange;
+};
 
-/** @brief 三路舵轮逆解结果。 */
 struct ChassisWheelCommand
 {
-    float steerEncoder[RobotConfig::WHEEL_COUNT]; ///< 舵向目标编码器，0~8192。
-    float wheelRpm[RobotConfig::WHEEL_COUNT];     ///< 轮向目标转速 (RPM)。
+    float steerEncoder[ChassisGeometry::WHEEL_COUNT];
+    float wheelRpm[ChassisGeometry::WHEEL_COUNT];
 };
 
 class ChassisKinematics
 {
 public:
-    ChassisKinematics();
-
-    /**
-     * @brief 由车体速度和当前舵向编码器解出三路目标。
-     * @param vel 车体目标速度。
-     * @param encoder 当前三路 6020 编码器，下标 0/1/2 对应前/左/右。
-     */
-    ChassisWheelCommand Inverse(const ChassisBodyVelocity &vel,
-                                const int16_t encoder[RobotConfig::WHEEL_COUNT]);
-
-    /**
-     * @brief 由实际舵角和轮向机械转速估计车体速度。
-     * @param encoder 三路 6020 实际编码器，下标 0/1/2 对应前/左/右。
-     * @param wheelRpm 三路 VESC 反馈的有符号机械转速 (RPM)。
-     * @note 假定轮子沿舵向滚动且没有明显打滑；结果不包含场地位置。
-     */
-    ChassisBodyVelocity Forward(const int16_t encoder[RobotConfig::WHEEL_COUNT],
-                                const float wheelRpm[RobotConfig::WHEEL_COUNT]) const;
-
-    const ChassisBodyVelocity &BodyVelocity() const
-    {
-        return bodyVelocity_;
-    }
-
-    const ChassisWheelCommand &Command() const
-    {
-        return command_;
-    }
+    explicit ChassisKinematics(const ChassisGeometry& geometry);
+    /** @brief 已验证的车体速度和实际编码器，静止时保留上一拍舵向 */
+    const ChassisWheelCommand& Inverse(const ChassisBodyVelocity& velocity,
+                                       const int16_t encoder[ChassisGeometry::WHEEL_COUNT]);
+    /** @brief 在线轮速和舵角正解，假定无明显打滑 */
+    ChassisBodyVelocity Forward(const int16_t encoder[ChassisGeometry::WHEEL_COUNT],
+                                const float wheelRpm[ChassisGeometry::WHEEL_COUNT]) const;
 
 private:
-    ChassisBodyVelocity bodyVelocity_;
-    ChassisWheelCommand command_;
+    const ChassisGeometry& geometry_;
+    ChassisWheelCommand command_ = {};
 };

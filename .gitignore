@@ -6,6 +6,10 @@
 compile_commands.json
 compile_flags.txt
 
+# 本机构建和主机测试输出
+/build/
+/tests/build/
+
 # 编辑器临时文件、备份和合并残留。
 *.user
 *.suo

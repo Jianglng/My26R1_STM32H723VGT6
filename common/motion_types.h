@@ -1,12 +1,16 @@
+/**
+ * @file motion_types.h
+ * @brief 跨模块运动数据类型
+ */
 #pragma once
 
 #include <stdint.h>
 
 /**
- * @brief 车体中心在当前定位坐标系中的位姿。
- * @note x/y 单位 m，yaw 单位 rad；车体 +x 向前，+y 向左，逆时针为正。
+ * @brief 车体中心在当前定位坐标系中的位姿
+ * @note x/y 单位 m，yaw 单位 rad；车体 +x 向前，+y 向左，逆时针为正
  *       里程计使用上电局部坐标；雷达参考点为实测旋转中心，位置以首次有效
- *       定位为原点，坐标轴及航向沿用雷达世界系。
+ *       定位为原点，坐标轴及航向沿用雷达世界系
  */
 struct ChassisPose2D
 {
@@ -15,26 +19,27 @@ struct ChassisPose2D
     float yaw = 0.0f;
 };
 
-/** @brief 车体坐标系实测或目标速度，平移单位 m/s，角速度单位 rad/s。 */
+/** @brief 车体坐标系实测或目标速度，平移单位 m/s，角速度单位 rad/s */
 struct ChassisBodyVelocity
 {
-    float vx;   ///< 向前为正。
-    float vy;   ///< 向左为正。
-    float wz;   ///< 逆时针为正。
+    float vx;  ///< 向前为正
+    float vy;  ///< 向左为正
+    float wz;  ///< 逆时针为正
 };
 
-/** @brief 自动跑点使用的位姿来源，一次运行只选用一种，不自动切换。 */
+/** @brief 自动跑点使用的位姿来源，一次运行只选用一种，不自动切换 */
 enum class PoseSource : uint8_t
 {
+    None,
     Odometry,
     Lidar
 };
 
-/** @brief 带来源、更新时间和有效状态的完整位姿快照。 */
+/** @brief 带来源、更新时间和有效状态的完整位姿快照 */
 struct PoseFeedback
 {
     ChassisPose2D pose = {};
-    PoseSource source = PoseSource::Lidar;
-    uint32_t updateTick = 0U;           ///< 里程计更新或雷达完整帧接收时间 (ms)。
+    PoseSource source = PoseSource::None;
+    uint32_t updateTick = 0U;  ///< 里程计更新或雷达完整帧接收时间 (ms)
     bool valid = false;
 };

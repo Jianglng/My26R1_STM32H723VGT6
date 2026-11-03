@@ -30,7 +30,7 @@ chassis/                      底盘反馈、电机控制
 common/                       共用位姿、速度和反馈类型
 robot_config/                 机械、控制、航点和定位配置
 debug/                        Watch 镜像，不参与控制
-Task/                         底盘任务与周期调度
+task/                         底盘任务与周期调度
 tests/                        主机行为测试，使用实际解析、定位和控制代码
 ```
 
@@ -39,7 +39,7 @@ tests/                        主机行为测试，使用实际解析、定位�
 | 文件 | 修改内容 |
 |---|---|
 | `robot_config/robot_config.h` | 底盘机械参数、电机 ID、手动速度、舵向 PID |
-| `robot_config/auto_move_config.h` | `AutoMoveConfig::Odometry`、`AutoMoveConfig::Lidar` 两套自动运动参数 |
+| `robot_config/auto_move_config.h` | `AutoMoveConfig::ODOMETRY_DEFAULT`、`AutoMoveConfig::LIDAR_DEFAULT` 两套自动运动参数 |
 | `robot_config/auto_route_config.h` | 车体中心的绝对目标 x/y 和 yawDeg，按数组顺序跑点 |
 | `robot_config/localization_config.h` | 位姿来源、雷达超时、安装偏移、USB 每拍读取上限 |
 
@@ -49,9 +49,9 @@ tests/                        主机行为测试，使用实际解析、定位�
 constexpr PoseSource POSE_SOURCE = PoseSource::Lidar;
 ```
 
-修改后重新编译。来源在底盘任务初始化时确定，自动模式每次复位时绑定对应参数，不在行进中切换。雷达无效不会回退到里程计。
+修改后重新编译。来源是 `LocalizationConfig::POSE_SOURCE` 编译期常量，自动模式每次复位时绑定对应参数，不在行进中切换。雷达无效不会回退到里程计。
 
-两种来源共用 AutoMove 计算逻辑，规划速度、加减速度、P/D 增益、输出限制和到达条件均取自对应参数组。里程计整改前的 16 项参数已逐项核对保留，其中加速度为 0.6 m/s²、减速度为 0.4 m/s²、沿路径 Kd 为 1.2。
+两种来源共用 AutoMove 计算逻辑，规划速度、加减速度、P/D 增益、输出限制和到达条件均取自对应参数组。里程计参数中，加速度为 0.6 m/s²、减速度为 0.4 m/s²、沿路径 Kd 为 1.2。
 
 ## 底盘周期与位姿接口
 
@@ -65,26 +65,26 @@ constexpr PoseSource POSE_SOURCE = PoseSource::Lidar;
 `PoseSourceManager` 提供三个只读接口：
 
 ```cpp
-bool GetOdometryPose(PoseFeedback &feedback) const;
-bool GetLidarPose(PoseFeedback &feedback) const;
-bool GetCurrentPose(PoseFeedback &feedback) const;
+const PoseFeedback& OdometryPose() const;
+const PoseFeedback& LidarPose() const;
+const PoseFeedback& CurrentPose() const;
 ```
 
-返回值表示反馈是否有效。即使无效，输出快照中也保留来源和状态；自动控制必须检查有效性。Get 函数不接收数据、不等待、不推进积分。
+返回对象内的只读引用，不逐层复制位姿。调用者检查 `feedback.valid`；取值不接收数据、不等待、不推进积分。引用仅在所属对象存活时有效，不跨任务保存可变状态引用。
 
-`ChassisPose2D`、`ChassisBodyVelocity` 和 `PoseFeedback` 定义在 `common/motion_types.h`。位置计算使用 m，航向使用 rad，角速度使用 rad/s；角度配置和 Watch 使用度，角速度 Watch 使用 °/s。
+`ChassisPose2D`、`ChassisBodyVelocity` 和 `PoseFeedback` 定义在 `common/motion_types.h`。位置计算使用 m，航向使用 rad，角速度使用 rad/s；角度配置使用度，Watch 的便捷字段使用度或 °/s，原始遥测保留 SI 单位。
 
 ## USB 接收与雷达协议
 
 ```text
 CDC_Receive_HS
     → BspUsb_ReceiveBytes：缓存字节及接收时间
-    → Chassis_Task 调用 PoseSourceManager::UpdateLidar()
+    → chassis_task 调用 PoseSourceManager::UpdateLidar()
     → LidarLocalization::Update()
         → BspUsb::Read：每拍最多取 USB_READ_BUDGET_BYTES 个字节
         → LidarPoseProtocol::FeedByte：拼帧、校验、解析
         → 雷达中心换算为车体中心
-    → GetCurrentPose
+    → CurrentPose
     → AutoModeController / AutoMove
 ```
 
@@ -133,16 +133,27 @@ centerWorldY = radarY - 0.4636f * sinf(yaw) - 0.0160f * cosf(yaw);
 
 ## Watch 入口
 
-Watch 中添加以下三个全局变量：
+Watch 中添加以下全局变量：
 
 | 变量 | 用途 |
 |---|---|
-| `g_debug.obj` | 指向底盘任务中真实对象的指针，展开可实时查看全部成员；任务启动前为空 |
-| `g_debug.status` | 每 10 ms 更新的度制副本：各定位位姿、雷达原始位姿、自动运动误差与速度、USB 接收统计 |
-| `g_autoMoveTune` | 自动运动参数（度制），可修改 |
-| `g_steerPidTune` | 舵向串级 PID 参数，可修改 |
+| `g_debug.app` | 真实 `ChassisApp` 对象的指针，任务启动前为空 |
+| `g_debug.status` | 每 10 ms 更新的调试快照，不参与控制 |
+| `g_autoMoveTune` | 自动运动参数候选值，角度使用度 |
+| `g_steerPidTune` | 舵向串级 PID 参数候选值 |
 
-常用路径：雷达原点 `g_debug.obj.poseSourceManager->lidarLocalization_.lidarOrigin_`，协议计数 `...lidarLocalization_.lidarProtocol_.lidarProtocolState_`，航点进度 `g_debug.obj.autoMode->routeState_`，舵向 PID `g_debug.obj.chassis->steerAnglePid_[i].state_`。`status` 中 `yawDeg` 为度，`wzDegPerSec` 为 °/s；修改 `status` 不影响控制。
+常用路径：
+
+- 雷达原点：`g_debug.app->localization_.lidar_.origin_`
+- 雷达协议统计：`g_debug.app->localization_.lidar_.protocol_.state_`
+- 航点进度：`g_debug.app->autoMode_.routeState_`
+- 舵向 PID：`g_debug.app->chassis_.steerAnglePid_[i].state_`
+- 初始化状态、异常周期和发送失败计数、剩余栈：`g_debug.app->status_`
+- CAN 队列溢出、接收错误、发送错误和恢复计数：BSP 的 `g_busStates`，或任务上下文调用 `BspCan::State()`
+
+`status.autoMove.telemetry` 整块复制 `AutoMoveTelemetry`，其中 `yawError` 和 `referencePose.yaw` 使用 rad；`status.autoMove.reference` 整块复制梯形规划器状态。便捷字段 `target.yawDeg`、`yawErrorDeg`、`command.wzDegPerSec` 使用度制。其余 `DebugPose2D`、`DebugBodyVelocity` 字段同样带明确单位后缀。修改快照或 `g_autoMoveTune.applied` 不影响运行中的控制参数。
+
+发布构建可定义 `DEBUG_SNAPSHOT_ENABLE=0`，关闭快照刷新与对象入口登记；剩余栈统计仍保留。
 
 ## 运行时调参
 
@@ -151,10 +162,12 @@ Watch 中添加以下三个全局变量：
 - `g_autoMoveTune.odometry` / `lidar`：修改后拨动左拨杆，切档时应用到当前来源；行进中修改不生效。`applyCount`、`rejectCount`、`lastApplyValid` 和 `applied` 回显结果，参数无效时保留上一组有效参数。`maxOutputVelocity` 不得超过 `AutoMoveConfig::MAX_TUNE_OUTPUT_VELOCITY`。
 - `g_steerPidTune`：仅在 Stop 档每拍写入三个轮子，下档修改即时生效，中档和上档保持不变。`maxOut` 不得超过 `robot_config.h` 中的默认上限。
 
-调好的数值须手动抄回 `auto_move_config.h` 和 `robot_config.h` 的常量。
+调好的数值须手动抄回 `auto_move_config.h` 和 `robot_config.h` 的具名默认值构造函数。
 
 ## 验证与 CubeMX 再生成
 
-原点转换通过临时主机测试验证，包含首次有效帧、平移、旋转、非零初始航向、分包连包、超时/断连恢复及显式复位。工程中的 tests 文件目前已删除，未恢复；主机测试不替代实车定位精度和控制周期耗时验证。
+持久化主机行为测试位于 `tests/`，使用真实 PID、运动学、规划器、控制器、定位和 CAN 协议代码，替换硬件收发与系统时钟。测试覆盖闭环运动仿真、启动与结束停机、反馈丢失锁存、原点换算、超时及计数回绕等，执行方式见 `tests/README.md`。
+
+本轮完整验证记录见 `refactor_report.md`。主机测试不替代真实中断/DMA、控制周期耗时、舵向 PID 以及定位精度验证；尚未烧录和实车测试。
 
 Keil/EIDE 的应用分组和头文件路径均已同步迁移。以后通过 CubeMX 重新生成时，需要核对应用源文件和 include 路径仍在工程中，并检查 `freertos.c` 的 `MX_USB_DEVICE_Init()` 是否又被自动插入默认任务；USB 仍应由 BSP 在底盘初始化阶段统一初始化一次。

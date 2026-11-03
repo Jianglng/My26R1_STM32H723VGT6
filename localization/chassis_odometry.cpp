@@ -1,86 +1,63 @@
+/**
+ * @file chassis_odometry.cpp
+ * @brief IMU 断连使用轮速角速度，重连首帧只更新航向基准
+ */
 #include "chassis_odometry.h"
-
-#include "math_utils.h"
 
 #include <math.h>
 
-namespace
-{
-    constexpr float PI = 3.14159265358979323846f;
-    constexpr float DEG_TO_RAD = PI / 180.0f;
-    constexpr float MAX_UPDATE_INTERVAL_S = 0.05f;
-}
+#include "math_utils.h"
 
 void ChassisOdometry::Reset()
 {
-    pose_ = ChassisPose2D{};
+    state_ = State::Uninitialized;
+    feedback_ = {};
+    feedback_.source = PoseSource::Odometry;
     lastImuYawDeg_ = 0.0f;
-    imuYawInitialized_ = false;
-    initialized_ = false;
-    valid_ = false;
-    feedbackLost_ = false;
+    imuBaselineReady_ = false;
 }
 
-void ChassisOdometry::Update(const ChassisBodyVelocity &measuredBodyVelocity,
-                             float imuYawDeg, bool imuOnline, float dt, bool wheelFeedbackValid)
+void ChassisOdometry::Invalidate()
 {
-    if (feedbackLost_)
+    if (state_ == State::Valid)
+    {
+        state_ = State::Lost;
+    }
+    feedback_.valid = false;
+}
+
+void ChassisOdometry::Update(const OdometryInput& input)
+{
+    if (state_ == State::Lost)
     {
         return;
     }
-
-    const float bodyVx = measuredBodyVelocity.vx;
-    const float bodyVy = measuredBodyVelocity.vy;
-    const float bodyWz = measuredBodyVelocity.wz;
-    if (!wheelFeedbackValid || !isfinite(bodyVx) || !isfinite(bodyVy) || !isfinite(bodyWz))
+    if (!input.wheelFeedbackValid)
     {
-        if (initialized_)
-        {
-            feedbackLost_ = true;
-        }
-        valid_ = false;
+        Invalidate();
         return;
     }
-
-    const bool imuYawValid = imuOnline && isfinite(imuYawDeg);
-    if (!initialized_)
+    float deltaYaw = input.velocity.wz * input.dt;
+    if (state_ == State::Uninitialized)
     {
-        /* 首帧轮速反馈有效即建立原点；IMU 可随后上线，不积分未知的先前运动。 */
-        if (imuYawValid)
-        {
-            lastImuYawDeg_ = imuYawDeg;
-        }
-        imuYawInitialized_ = imuYawValid;
-        initialized_ = true;
-        valid_ = true;
-        return;
+        deltaYaw = 0.0f;
     }
-
-    if (!isfinite(dt) || dt <= 0.0f || dt > MAX_UPDATE_INTERVAL_S)
+    else if (input.imuOnline && imuBaselineReady_)
     {
-        feedbackLost_ = true;
-        valid_ = false;
-        return;
+        deltaYaw = MathUtils::DegToRad(MathUtils::WrapPeriodicError(input.imuYawDeg - lastImuYawDeg_, 360.0f));
     }
-
-    /* IMU 离线时由轮速角速度积分；重新上线的首帧只重建 IMU 角度基准。 */
-    float deltaYaw = bodyWz * dt;
-    if (imuYawValid)
+    lastImuYawDeg_ = input.imuYawDeg;
+    imuBaselineReady_ = input.imuOnline;
+    if (state_ == State::Valid)
     {
-        if (imuYawInitialized_)
-        {
-            deltaYaw = MathUtils::WrapPeriodicError(imuYawDeg - lastImuYawDeg_, 360.0f) * DEG_TO_RAD;
-        }
-        lastImuYawDeg_ = imuYawDeg;
+        const float middleYaw = feedback_.pose.yaw + 0.5f * deltaYaw;
+        const float cosYaw = cosf(middleYaw);
+        const float sinYaw = sinf(middleYaw);
+        feedback_.pose.x += (input.velocity.vx * cosYaw - input.velocity.vy * sinYaw) * input.dt;
+        feedback_.pose.y += (input.velocity.vx * sinYaw + input.velocity.vy * cosYaw) * input.dt;
+        feedback_.pose.yaw += deltaYaw;
     }
-    imuYawInitialized_ = imuYawValid;
-
-    const float middleYaw = pose_.yaw + 0.5f * deltaYaw;
-    const float cosYaw = cosf(middleYaw);
-    const float sinYaw = sinf(middleYaw);
-
-    pose_.x += (bodyVx * cosYaw - bodyVy * sinYaw) * dt;
-    pose_.y += (bodyVx * sinYaw + bodyVy * cosYaw) * dt;
-    pose_.yaw += deltaYaw;
-    valid_ = true;
+    state_ = State::Valid;
+    feedback_.valid = true;
+    feedback_.updateTick = input.nowTick;
 }

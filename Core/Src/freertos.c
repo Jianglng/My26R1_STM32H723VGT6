@@ -51,10 +51,10 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for Chassis_Task */
-osThreadId_t Chassis_TaskHandle;
-const osThreadAttr_t Chassis_Task_attributes = {
-  .name = "Chassis_Task",
+/* Definitions for chassis_task */
+osThreadId_t chassis_taskHandle;
+const osThreadAttr_t chassis_task_attributes = {
+  .name = "chassis_task",
   .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
@@ -99,8 +99,8 @@ void MX_FREERTOS_Init(void) {
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
-  /* creation of Chassis_Task */
-  Chassis_TaskHandle = osThreadNew(StartChassisTask, NULL, &Chassis_Task_attributes);
+  /* creation of chassis_task */
+  chassis_taskHandle = osThreadNew(StartChassisTask, NULL, &chassis_task_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -134,7 +134,7 @@ void StartDefaultTask(void *argument)
 
 /* USER CODE BEGIN Header_StartChassisTask */
 /**
-* @brief Function implementing the Chassis_Task thread.
+* @brief Function implementing the chassis_task thread.
 * @param argument: Not used
 * @retval None
 */

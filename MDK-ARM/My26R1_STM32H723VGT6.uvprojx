@@ -331,17 +331,17 @@
             <uGnu>1</uGnu>
             <useXO>0</useXO>
             <v6Lang>3</v6Lang>
-            <v6LangP>3</v6LangP>
+            <v6LangP>6</v6LangP>
             <vShortEn>1</vShortEn>
             <vShortWch>1</vShortWch>
             <v6Lto>0</v6Lto>
             <v6WtE>0</v6WtE>
             <v6Rtti>0</v6Rtti>
             <VariousControls>
-              <MiscControls></MiscControls>
+              <MiscControls>-Wall -Wextra</MiscControls>
               <Define>USE_PWR_LDO_SUPPLY,USE_HAL_DRIVER,STM32H723xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Drivers/CMSIS/RTOS2/Include;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;../USB_DEVICE/App;../USB_DEVICE/Target;../Middlewares/ST/STM32_USB_Device_Library/Core/Inc;../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc;../Task;../bsp;../protocol/vesc;../protocol/dji;../protocol/remote;../protocol/imu;../protocol/lidar;../localization;../control/manual;../control/auto;../algorithm/trajectory;../algorithm/kinematics;../algorithm/pid;../algorithm/math;../chassis;../common;../robot_config;../debug</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../Drivers/CMSIS/RTOS2/Include;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;../USB_DEVICE/App;../USB_DEVICE/Target;../Middlewares/ST/STM32_USB_Device_Library/Core/Inc;../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc;../task;../bsp;../protocol/vesc;../protocol/dji;../protocol/remote;../protocol/imu;../protocol/lidar;../localization;../control/manual;../control/auto;../algorithm/trajectory;../algorithm/kinematics;../algorithm/pid;../algorithm/math;../chassis;../common;../robot_config;../debug</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -2346,12 +2346,12 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>Task</GroupName>
+          <GroupName>task</GroupName>
           <Files>
             <File>
-              <FileName>Chassis_Task.cpp</FileName>
+              <FileName>chassis_task.cpp</FileName>
               <FileType>8</FileType>
-              <FilePath>../Task/Chassis_Task.cpp</FilePath>
+              <FilePath>../task/chassis_task.cpp</FilePath>
               <FileOption>
                 <CommonProperty>
                   <UseCPPCompiler>2</UseCPPCompiler>
@@ -2395,7 +2395,7 @@
                     <v6WtE>2</v6WtE>
                     <v6Rtti>2</v6Rtti>
                     <VariousControls>
-                      <MiscControls></MiscControls>
+                      <MiscControls>-Wall -Wextra</MiscControls>
                       <Define></Define>
                       <Undefine></Undefine>
                       <IncludePath></IncludePath>
@@ -2405,9 +2405,19 @@
               </FileOption>
             </File>
             <File>
-              <FileName>Chassis_Task.h</FileName>
+              <FileName>chassis_app.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>../task/chassis_app.cpp</FilePath>
+            </File>
+            <File>
+              <FileName>chassis_app.h</FileName>
               <FileType>5</FileType>
-              <FilePath>../Task/Chassis_Task.h</FilePath>
+              <FilePath>../task/chassis_app.h</FilePath>
+            </File>
+            <File>
+              <FileName>chassis_task.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../task/chassis_task.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -2461,7 +2471,7 @@
                     <v6WtE>2</v6WtE>
                     <v6Rtti>2</v6Rtti>
                     <VariousControls>
-                      <MiscControls></MiscControls>
+                      <MiscControls>-Wall -Wextra</MiscControls>
                       <Define></Define>
                       <Undefine></Undefine>
                       <IncludePath></IncludePath>
@@ -2474,6 +2484,11 @@
               <FileName>bsp_can.h</FileName>
               <FileType>5</FileType>
               <FilePath>../bsp/bsp_can.h</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_critical.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../bsp/bsp_critical.h</FilePath>
             </File>
             <File>
               <FileName>bsp_dwt.cpp</FileName>
@@ -2557,7 +2572,7 @@
                     <v6WtE>2</v6WtE>
                     <v6Rtti>2</v6Rtti>
                     <VariousControls>
-                      <MiscControls></MiscControls>
+                      <MiscControls>-Wall -Wextra</MiscControls>
                       <Define></Define>
                       <Undefine></Undefine>
                       <IncludePath></IncludePath>
@@ -2741,6 +2756,11 @@
               <FileType>5</FileType>
               <FilePath>../algorithm/trajectory/trapezoidal_profile.h</FilePath>
             </File>
+            <File>
+              <FileName>auto_move_params.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../algorithm/trajectory/auto_move_params.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -2787,9 +2807,9 @@
           <GroupName>chassis</GroupName>
           <Files>
             <File>
-              <FileName>Chassis.cpp</FileName>
+              <FileName>chassis.cpp</FileName>
               <FileType>8</FileType>
-              <FilePath>../chassis/Chassis.cpp</FilePath>
+              <FilePath>../chassis/chassis.cpp</FilePath>
               <FileOption>
                 <CommonProperty>
                   <UseCPPCompiler>2</UseCPPCompiler>
@@ -2833,7 +2853,7 @@
                     <v6WtE>2</v6WtE>
                     <v6Rtti>2</v6Rtti>
                     <VariousControls>
-                      <MiscControls></MiscControls>
+                      <MiscControls>-Wall -Wextra</MiscControls>
                       <Define></Define>
                       <Undefine></Undefine>
                       <IncludePath></IncludePath>
@@ -2843,9 +2863,9 @@
               </FileOption>
             </File>
             <File>
-              <FileName>Chassis.h</FileName>
+              <FileName>chassis.h</FileName>
               <FileType>5</FileType>
-              <FilePath>../chassis/Chassis.h</FilePath>
+              <FilePath>../chassis/chassis.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -2898,9 +2918,9 @@
           <GroupName>debug</GroupName>
           <Files>
             <File>
-              <FileName>Debug_Snapshot.cpp</FileName>
+              <FileName>debug_snapshot.cpp</FileName>
               <FileType>8</FileType>
-              <FilePath>../debug/Debug_Snapshot.cpp</FilePath>
+              <FilePath>../debug/debug_snapshot.cpp</FilePath>
               <FileOption>
                 <CommonProperty>
                   <UseCPPCompiler>2</UseCPPCompiler>
@@ -2944,7 +2964,7 @@
                     <v6WtE>2</v6WtE>
                     <v6Rtti>2</v6Rtti>
                     <VariousControls>
-                      <MiscControls></MiscControls>
+                      <MiscControls>-Wall -Wextra</MiscControls>
                       <Define></Define>
                       <Undefine></Undefine>
                       <IncludePath></IncludePath>
@@ -2954,9 +2974,9 @@
               </FileOption>
             </File>
             <File>
-              <FileName>Debug_Snapshot.h</FileName>
+              <FileName>debug_snapshot.h</FileName>
               <FileType>5</FileType>
-              <FilePath>../debug/Debug_Snapshot.h</FilePath>
+              <FilePath>../debug/debug_snapshot.h</FilePath>
             </File>
           </Files>
         </Group>

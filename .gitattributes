@@ -1,0 +1,15 @@
+/algorithm/** text eol=lf
+/bsp/** text eol=lf
+/chassis/** text eol=lf
+/common/** text eol=lf
+/control/** text eol=lf
+/debug/** text eol=lf
+/localization/** text eol=lf
+/protocol/** text eol=lf
+/robot_config/** text eol=lf
+/task/** text eol=lf
+/tests/** text eol=lf
+/docs/** text eol=lf
+/.clang-format text eol=lf
+/MDK-ARM/.eide/*.yml text eol=lf
+/MDK-ARM/*.uvprojx text eol=crlf

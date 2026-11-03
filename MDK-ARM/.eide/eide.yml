@@ -101,15 +101,18 @@ virtualFolder:
             - path: ../Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c
             - path: ../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c
           folders: []
-    - name: Task
+    - name: task
       files:
-        - path: ../Task/Chassis_Task.cpp
-        - path: ../Task/Chassis_Task.h
+        - path: ../task/chassis_task.cpp
+        - path: ../task/chassis_app.cpp
+        - path: ../task/chassis_app.h
+        - path: ../task/chassis_task.h
       folders: []
     - name: bsp
       files:
         - path: ../bsp/bsp_can.cpp
         - path: ../bsp/bsp_can.h
+        - path: ../bsp/bsp_critical.h
         - path: ../bsp/bsp_dwt.cpp
         - path: ../bsp/bsp_dwt.h
         - path: ../bsp/bsp_uart.cpp
@@ -180,6 +183,7 @@ virtualFolder:
           files:
             - path: ../algorithm/trajectory/trapezoidal_profile.cpp
             - path: ../algorithm/trajectory/trapezoidal_profile.h
+            - path: ../algorithm/trajectory/auto_move_params.h
           folders: []
         - name: kinematics
           files:
@@ -197,8 +201,8 @@ virtualFolder:
           folders: []
     - name: chassis
       files:
-        - path: ../chassis/Chassis.cpp
-        - path: ../chassis/Chassis.h
+        - path: ../chassis/chassis.cpp
+        - path: ../chassis/chassis.h
       folders: []
     - name: common
       files:
@@ -215,8 +219,8 @@ virtualFolder:
       folders: []
     - name: debug
       files:
-        - path: ../debug/Debug_Snapshot.cpp
-        - path: ../debug/Debug_Snapshot.h
+        - path: ../debug/debug_snapshot.cpp
+        - path: ../debug/debug_snapshot.h
       folders: []
     - name: ::CMSIS
       files: []
@@ -247,7 +251,7 @@ targets:
         - ../USB_DEVICE/Target
         - ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc
         - ../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
-        - ../Task
+        - ../task
         - ../bsp
         - ../protocol/vesc
         - ../protocol/dji
@@ -366,8 +370,10 @@ targets:
             misc-controls: ""
           beforeBuildTasks: []
           c/cpp-compiler:
+            CXX_FLAGS: -Wall -Wextra
+            C_FLAGS: -Wall -Wextra
             language-c: c99
-            language-cpp: c++11
+            language-cpp: c++14
             link-time-optimization: false
             one-elf-section-per-function: true
             optimization: level-3

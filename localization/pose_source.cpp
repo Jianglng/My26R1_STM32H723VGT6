@@ -1,58 +1,31 @@
+/**
+ * @file pose_source.cpp
+ * @brief 定位更新转发，不复制或存储第二份位姿
+ */
 #include "pose_source.h"
 
-void PoseSourceManager::Reset(PoseSource source)
+void PoseSourceManager::Reset()
 {
-    selectedSource_ = source;
-    chassisOdometry_.Reset();
-    lidarLocalization_.Reset();
-    odometryFeedback_ = PoseFeedback{};
-    odometryFeedback_.source = PoseSource::Odometry;
+    odometry_.Reset();
+    lidar_.Reset();
 }
 
 void PoseSourceManager::UpdateLidar()
 {
-    lidarLocalization_.Update();
+    lidar_.Update();
 }
 
-void PoseSourceManager::UpdateOdometry(const ChassisBodyVelocity &measuredBodyVelocity,
-                                      float imuYawDeg, bool imuOnline, float dt,
-                                      bool wheelFeedbackValid, uint32_t nowTick)
+void PoseSourceManager::UpdateOdometry(const OdometryInput& input)
 {
-    if (selectedSource_ != PoseSource::Odometry)
-    {
-        return;
-    }
-
-    chassisOdometry_.Update(measuredBodyVelocity, imuYawDeg, imuOnline, dt, wheelFeedbackValid);
-    odometryFeedback_.pose = chassisOdometry_.Pose();
-    odometryFeedback_.valid = chassisOdometry_.Valid();
-    if (odometryFeedback_.valid)
-    {
-        odometryFeedback_.updateTick = nowTick;
-    }
+    odometry_.Update(input);
 }
 
-bool PoseSourceManager::GetOdometryPose(PoseFeedback &feedback) const
+void PoseSourceManager::InvalidateOdometry()
 {
-    feedback = odometryFeedback_;
-    return feedback.valid;
+    odometry_.Invalidate();
 }
 
-bool PoseSourceManager::GetLidarPose(PoseFeedback &feedback) const
+const PoseFeedback& PoseSourceManager::CurrentPose() const
 {
-    feedback = lidarLocalization_.Feedback();
-    return feedback.valid;
-}
-
-bool PoseSourceManager::GetCurrentPose(PoseFeedback &feedback) const
-{
-    switch (selectedSource_)
-    {
-        case PoseSource::Odometry: return GetOdometryPose(feedback);
-        case PoseSource::Lidar:    return GetLidarPose(feedback);
-        default:
-            feedback = PoseFeedback{};
-            feedback.source = selectedSource_;
-            return false;
-    }
+    return Source() == PoseSource::Lidar ? LidarPose() : OdometryPose();
 }

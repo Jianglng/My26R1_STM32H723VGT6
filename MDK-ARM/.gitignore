@@ -13,11 +13,15 @@
 /*.elf
 /*.hex
 /*.bin
+/*.s19
+/*.srec
 /*.map
 /*.lst
 /*.htm
 /*.crf
 /*.o
+/*.obj
+/*.su
 /*.d
 /*.dep
 /*.lnp
@@ -45,6 +49,6 @@
 /*.ept
 /*.eide-template
 
-# 保留 .uvprojx、.code-workspace、.clang-format 和 .eide 工程配置。
+# 保留 .uvprojx、.code-workspace 和 .eide 工程配置
 # .cmsis、.pack、RTE 及 DebugConfig 是现有工程依赖，正常提交。
 # 不全局忽略 .sct/.ld 链接脚本、.lib/.a 库或 .htm 文档。

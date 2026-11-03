@@ -1,169 +1,198 @@
-/* USER CODE BEGIN Header */
-/** @brief FDCAN 初始化、发送，以及把接收帧交给 VESC / 6020。 */
-/* USER CODE END Header */
-
+/**
+ * @file bsp_can.cpp
+ * @brief 硬件句柄封装、BUS_OFF 恢复和接收帧缓存
+ */
 #include "bsp_can.h"
 
-#include "vesc_motor.h"
-#include "dji_6020.h"
+#include <string.h>
 
-/* 接收帧。VESC 用 FIFO1，6020 用 FIFO0。 */
-FdcanRxFrame BspCan::fdcanRxFifo1Frame_;
-FdcanRxFrame BspCan::fdcanRxFifo0Frame_;
+#include "fdcan.h"
 
-/* 当前 C++ 方言不用指派初始化，发送帧在 Init() 里逐项赋值。 */
-FdcanTxFrame BspCan::fdcan1TxFrame_ = {};
-FdcanTxFrame BspCan::fdcan3TxFrame_ = {};
+#include "bsp_critical.h"
 
-
-
-void BspCan::Init()
+namespace
 {
-    FDCAN_FilterTypeDef FilterConfig; 
+    constexpr uint32_t RX_CAPACITY = 32U;
+    constexpr uint32_t RX_BUDGET = 32U;
+    constexpr uint32_t BUS_COUNT = 2U;
+    constexpr uint32_t MAX_CAN_PAYLOAD_SIZE = 64U;
 
-    /* Cube 已经初始化 FDCAN1，这里只填可复用的发送帧。 */
-    fdcan1TxFrame_.hcan = &hfdcan1;
-    fdcan1TxFrame_.header.Identifier = 0;
-    fdcan1TxFrame_.header.IdType = FDCAN_EXTENDED_ID;
-    fdcan1TxFrame_.header.TxFrameType = FDCAN_DATA_FRAME;
-    fdcan1TxFrame_.header.DataLength = FDCAN_DLC_BYTES_8;
-    fdcan1TxFrame_.header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    fdcan1TxFrame_.header.BitRateSwitch = FDCAN_BRS_OFF;
-    fdcan1TxFrame_.header.FDFormat = FDCAN_CLASSIC_CAN;
-    fdcan1TxFrame_.header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-    fdcan1TxFrame_.header.MessageMarker = 0;
-    for (uint32_t i = 0; i < 8; ++i) fdcan1TxFrame_.data[i] = 0;
-
-    /* FDCAN1 --------------------------------------------------------------*/
-    FilterConfig.IdType       = FDCAN_EXTENDED_ID;
-    FilterConfig.FilterIndex  = 0;
-    FilterConfig.FilterType   = FDCAN_FILTER_MASK;
-    FilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;  //通过该过滤器的报文放入 FDCAN1 的硬件 FIFO1
-    FilterConfig.FilterID1    = 0x00000000;
-    FilterConfig.FilterID2    = 0x00000000;
-
-    if (HAL_FDCAN_ConfigFilter(&hfdcan1, &FilterConfig) != HAL_OK) Error_Handler();
-    if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_REJECT, FDCAN_REJECT,
-                                     FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK) Error_Handler();
-    if (HAL_FDCAN_ConfigInterruptLines(&hfdcan1, FDCAN_IT_RX_FIFO1_NEW_MESSAGE, FDCAN_INTERRUPT_LINE1) != HAL_OK) Error_Handler();
-    if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO1_NEW_MESSAGE, 0) != HAL_OK) Error_Handler();
-    if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK) Error_Handler();
-
-    /* FDCAN3 (DJI 6020) -----------------------------------------------------*/
-    /* 6020 用标准帧，与 VESC 的扩展帧不同，发送帧头必须按标准帧配置。 */
-    fdcan3TxFrame_.hcan = &hfdcan3;
-    fdcan3TxFrame_.header.Identifier = 0x1FF;         // 1~4 号电机控制帧，发送前由协议层重设
-    fdcan3TxFrame_.header.IdType = FDCAN_STANDARD_ID;
-    fdcan3TxFrame_.header.TxFrameType = FDCAN_DATA_FRAME;
-    fdcan3TxFrame_.header.DataLength = FDCAN_DLC_BYTES_8;
-    fdcan3TxFrame_.header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    fdcan3TxFrame_.header.BitRateSwitch = FDCAN_BRS_OFF;
-    fdcan3TxFrame_.header.FDFormat = FDCAN_CLASSIC_CAN;
-    fdcan3TxFrame_.header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-    fdcan3TxFrame_.header.MessageMarker = 0;
-    for (uint32_t i = 0; i < 8; ++i) fdcan3TxFrame_.data[i] = 0;
-
-    /* 6020 反馈帧是标准帧（0x205~0x208），滤波器必须用 FDCAN_STANDARD_ID。
-     * 用 FDCAN_EXTENDED_ID 会导致滤波器安装失败，帧被静默丢弃。 */
-    FilterConfig.IdType       = FDCAN_STANDARD_ID;
-    FilterConfig.FilterIndex  = 0;
-    FilterConfig.FilterType   = FDCAN_FILTER_MASK;
-    FilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;   // 6020 走 FIFO0（VESC 走 FIFO1）
-    FilterConfig.FilterID1    = 0x00000000;
-    FilterConfig.FilterID2    = 0x00000000;
-
-    if (HAL_FDCAN_ConfigFilter(&hfdcan3, &FilterConfig) != HAL_OK) Error_Handler();
-    if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan3, FDCAN_REJECT, FDCAN_REJECT,
-                                     FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK) Error_Handler();
-    if (HAL_FDCAN_ConfigInterruptLines(&hfdcan3, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, FDCAN_INTERRUPT_LINE0) != HAL_OK) Error_Handler();
-    if (HAL_FDCAN_ActivateNotification(&hfdcan3, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK) Error_Handler();
-    if (HAL_FDCAN_Start(&hfdcan3) != HAL_OK) Error_Handler();
-
-}
-/** @brief 把已填好的帧放进硬件发送队列。 */
-void BspCan::AddMessageToTxFifoQ(FdcanTxFrame *txFrame)
-{
-    HAL_FDCAN_AddMessageToTxFifoQ(txFrame->hcan,
-                                  &txFrame->header,
-                                  txFrame->data);
-}
-/** @brief FDCAN1 FIFO1：取出 VESC 扩展帧并交给协议层。 */
-void BspCan::RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
-{
-    (void)RxFifo1ITs;
-
-    fdcanRxFifo1Frame_.hcan = hfdcan;
-    if (HAL_FDCAN_GetRxMessage(hfdcan,
-                           FDCAN_RX_FIFO1,
-                           &fdcanRxFifo1Frame_.header,
-                           fdcanRxFifo1Frame_.data) != HAL_OK) return;
-
-    /* VESC 状态帧必须是 29 位扩展数据帧，负载固定 8 字节。 */
-    if (fdcanRxFifo1Frame_.header.IdType != FDCAN_EXTENDED_ID ||
-        fdcanRxFifo1Frame_.header.RxFrameType != FDCAN_DATA_FRAME ||
-        fdcanRxFifo1Frame_.header.DataLength != FDCAN_DLC_BYTES_8)
+    struct RxFrame
     {
-        return;
-    }
+        uint32_t id;
+        uint32_t receiveTick;
+        CanBus bus;
+        uint8_t data[CAN_CLASSIC_PAYLOAD_SIZE];
+    };
 
-    /* VESC 总线：只把 ID 和数据交给协议层，硬件细节不往上透传 */
-    if (hfdcan == &hfdcan1) {
-        VescMotor::ParseCanFeedback(fdcanRxFifo1Frame_.header.Identifier,
-                                    fdcanRxFifo1Frame_.data);
-    }
-}
+    RxFrame g_rxFrames[RX_CAPACITY] = {};  // CAN 中断写，底盘任务读取
+    // 两路 CAN 中断同为抢占优先级 5，生产者互不嵌套，任务在临界区取帧
+    volatile uint32_t g_readIndex = 0U;
+    volatile uint32_t g_writeIndex = 0U;
+    volatile uint32_t g_queuedFrames = 0U;
+    BspCan::Receiver g_receivers[BUS_COUNT] = {};      // 初始化写，底盘任务读
+    volatile CanBusState g_busStates[BUS_COUNT] = {};  // 中断和任务更新，读取时保护
 
-extern "C" void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
-{
-    BspCan::RxFifo1Callback(hfdcan, RxFifo1ITs);
-}
-/** @brief FDCAN3 FIFO0：取出 6020 标准帧并交给协议层。 */
-void BspCan::RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
-{
-    (void)RxFifo0ITs;
-
-    fdcanRxFifo0Frame_.hcan = hfdcan;
-    if (HAL_FDCAN_GetRxMessage(hfdcan,
-                           FDCAN_RX_FIFO0,
-                           &fdcanRxFifo0Frame_.header,
-                           fdcanRxFifo0Frame_.data) != HAL_OK) return;
-
-    /* DJI 6020 反馈必须是 11 位标准的数据帧，负载固定 8 字节。 */
-    if (fdcanRxFifo0Frame_.header.IdType != FDCAN_STANDARD_ID ||
-        fdcanRxFifo0Frame_.header.RxFrameType != FDCAN_DATA_FRAME ||
-        fdcanRxFifo0Frame_.header.DataLength != FDCAN_DLC_BYTES_8)
+    FDCAN_HandleTypeDef& Handle(CanBus bus)
     {
-        return;
+        return bus == CanBus::Wheel ? hfdcan1 : hfdcan3;
     }
 
-    /* 6020 总线：只把 ID 和数据交给协议层，硬件细节不往上透传 */
-    if (hfdcan == &hfdcan3) {
-        Dji6020Bus::ParseFeedback(fdcanRxFifo0Frame_.header.Identifier,
-                              fdcanRxFifo0Frame_.data);
+    bool ConfigureBus(CanBus bus)
+    {
+        FDCAN_HandleTypeDef& handle = Handle(bus);
+        const bool wheel = bus == CanBus::Wheel;
+        const uint32_t interrupt = wheel ? FDCAN_IT_RX_FIFO1_NEW_MESSAGE : FDCAN_IT_RX_FIFO0_NEW_MESSAGE;
+        FDCAN_FilterTypeDef filter = {};
+        filter.IdType = wheel ? FDCAN_EXTENDED_ID : FDCAN_STANDARD_ID;
+        filter.FilterIndex = 0U;
+        filter.FilterType = FDCAN_FILTER_MASK;
+        filter.FilterConfig = wheel ? FDCAN_FILTER_TO_RXFIFO1 : FDCAN_FILTER_TO_RXFIFO0;
+        return HAL_FDCAN_ConfigFilter(&handle, &filter) == HAL_OK &&
+               HAL_FDCAN_ConfigGlobalFilter(&handle, FDCAN_REJECT, FDCAN_REJECT, FDCAN_REJECT_REMOTE,
+                                            FDCAN_REJECT_REMOTE) == HAL_OK &&
+               HAL_FDCAN_ConfigInterruptLines(&handle, interrupt,
+                                              wheel ? FDCAN_INTERRUPT_LINE1 : FDCAN_INTERRUPT_LINE0) == HAL_OK &&
+               HAL_FDCAN_ActivateNotification(&handle, interrupt, 0U) == HAL_OK && HAL_FDCAN_Start(&handle) == HAL_OK;
+    }
+
+    bool Recover(CanBus bus)
+    {
+        FDCAN_HandleTypeDef& handle = Handle(bus);
+        if ((handle.Instance->IR & FDCAN_FLAG_BUS_OFF) == 0U)
+        {
+            return true;
+        }
+        if (HAL_FDCAN_Stop(&handle) != HAL_OK)
+        {
+            return false;
+        }
+        handle.Instance->IR = FDCAN_FLAG_BUS_OFF;
+        ++g_busStates[static_cast<uint32_t>(bus)].recoveryCount;
+        return HAL_FDCAN_Start(&handle) == HAL_OK;
+    }
+
+    void Receive(CanBus bus, uint32_t fifo)
+    {
+        // FIFO 深度有限，取出本次中断已有的帧，避免单帧回调遗漏积压数据
+        FDCAN_HandleTypeDef& handle = Handle(bus);
+        const uint32_t count = HAL_FDCAN_GetRxFifoFillLevel(&handle, fifo);
+        for (uint32_t i = 0U; i < count; ++i)
+        {
+            FDCAN_RxHeaderTypeDef header = {};
+            RxFrame frame = {};
+            // HAL 按收到的 DLC 写入，先容纳完整 CAN FD 负载，再筛选经典帧
+            uint8_t payload[MAX_CAN_PAYLOAD_SIZE] = {};
+            if (HAL_FDCAN_GetRxMessage(&handle, fifo, &header, payload) != HAL_OK)
+            {
+                ++g_busStates[static_cast<uint32_t>(bus)].receiveErrorCount;
+                return;
+            }
+            const uint32_t expectedType = bus == CanBus::Wheel ? FDCAN_EXTENDED_ID : FDCAN_STANDARD_ID;
+            if (header.IdType != expectedType || header.RxFrameType != FDCAN_DATA_FRAME ||
+                header.DataLength != FDCAN_DLC_BYTES_8)
+            {
+                continue;
+            }
+            if (g_queuedFrames == RX_CAPACITY)
+            {
+                ++g_busStates[static_cast<uint32_t>(bus)].receiveOverflowCount;
+                continue;
+            }
+            frame.id = header.Identifier;
+            frame.receiveTick = HAL_GetTick();
+            frame.bus = bus;
+            memcpy(frame.data, payload, CAN_CLASSIC_PAYLOAD_SIZE);
+            g_rxFrames[g_writeIndex] = frame;
+            g_writeIndex = (g_writeIndex + 1U) % RX_CAPACITY;
+            ++g_queuedFrames;
+        }
+    }
+
+    bool Pop(RxFrame& frame)
+    {
+        CriticalSection lock;
+        if (g_queuedFrames == 0U)
+        {
+            return false;
+        }
+        frame = g_rxFrames[g_readIndex];
+        g_readIndex = (g_readIndex + 1U) % RX_CAPACITY;
+        --g_queuedFrames;
+        return true;
+    }
+}  // namespace
+
+bool BspCan::Init()
+{
+    return ConfigureBus(CanBus::Wheel) && ConfigureBus(CanBus::Steer);
+}
+
+void BspCan::RegisterReceiver(CanBus bus, Receiver receiver)
+{
+    g_receivers[static_cast<uint32_t>(bus)] = receiver;
+}
+
+bool BspCan::Send(CanBus bus, uint32_t id, CanIdType type, const uint8_t (&data)[CAN_CLASSIC_PAYLOAD_SIZE])
+{
+    FDCAN_TxHeaderTypeDef header = {};
+    header.Identifier = id;
+    header.IdType = type == CanIdType::Extended ? FDCAN_EXTENDED_ID : FDCAN_STANDARD_ID;
+    header.TxFrameType = FDCAN_DATA_FRAME;
+    header.DataLength = FDCAN_DLC_BYTES_8;
+    header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    header.BitRateSwitch = FDCAN_BRS_OFF;
+    header.FDFormat = FDCAN_CLASSIC_CAN;
+    header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    const bool sent = Recover(bus) && HAL_FDCAN_AddMessageToTxFifoQ(&Handle(bus), &header, data) == HAL_OK;
+    if (!sent)
+    {
+        ++g_busStates[static_cast<uint32_t>(bus)].transmitErrorCount;
+    }
+    return sent;
+}
+
+void BspCan::ProcessReceive()
+{
+    for (uint32_t i = 0U; i < RX_BUDGET; ++i)
+    {
+        RxFrame frame = {};
+        if (!Pop(frame))
+        {
+            break;
+        }
+        Receiver receiver = g_receivers[static_cast<uint32_t>(frame.bus)];
+        if (receiver != nullptr)
+        {
+            receiver(frame.id, frame.data, frame.receiveTick);
+        }
     }
 }
 
-extern "C" void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
+CanBusState BspCan::State(CanBus bus)
 {
-    BspCan::RxFifo0Callback(hfdcan, RxFifo0ITs);
+    CriticalSection lock;
+    const volatile CanBusState& source = g_busStates[static_cast<uint32_t>(bus)];
+    CanBusState state = {};
+    state.transmitErrorCount = source.transmitErrorCount;
+    state.recoveryCount = source.recoveryCount;
+    state.receiveOverflowCount = source.receiveOverflowCount;
+    state.receiveErrorCount = source.receiveErrorCount;
+    return state;
 }
 
-void BspCan::CheckBusOff(FDCAN_HandleTypeDef *hfdcan)
+extern "C" void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef* handle, uint32_t events)
 {
-    if (hfdcan == nullptr) return;
+    if (handle == &hfdcan1 && (events & FDCAN_IT_RX_FIFO1_NEW_MESSAGE) != 0U)
+    {
+        Receive(CanBus::Wheel, FDCAN_RX_FIFO1);
+    }
+}
 
-    /* AutoRetransmission=DISABLE 时，发送连续失败会进入 BUS_OFF，
-     * 此时收发全部停止，必须手动 Stop + Start 才能恢复。
-     *
-     * 注意：不能用 HAL_FDCAN_GetError() 判断 BUS_OFF —— 它返回的是 HAL
-     * 内部分类错误码（例如 512 = HAL_FDCAN_ERROR_FIFO_FULL，FIFO 满），
-     * 与总线状态无关。正确做法是读协议状态标志 FDCAN_FLAG_BUS_OFF。 */
-    if ((hfdcan->Instance->IR & FDCAN_FLAG_BUS_OFF) == 0) return;
-
-    HAL_FDCAN_Stop(hfdcan);
-
-    /* 清 BUS_OFF 标志，否则 Start 之后立刻又被判定为 BUS_OFF */
-    hfdcan->Instance->IR = FDCAN_FLAG_BUS_OFF;
-
-    HAL_FDCAN_Start(hfdcan);
+extern "C" void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* handle, uint32_t events)
+{
+    if (handle == &hfdcan3 && (events & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0U)
+    {
+        Receive(CanBus::Steer, FDCAN_RX_FIFO0);
+    }
 }

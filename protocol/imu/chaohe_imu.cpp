@@ -1,25 +1,26 @@
+/**
+ * @file chaohe_imu.cpp
+ * @brief 超核 IMU 接收与状态管理
+ */
 #include "chaohe_imu.h"
 
+#include <math.h>
 #include <string.h>
 
+#include "bsp_critical.h"
 #include "bsp_uart.h"
 
-HAL_StatusTypeDef ChaoheImu::Init(UART_HandleTypeDef *uart)
+HAL_StatusTypeDef ChaoheImu::Init(UART_HandleTypeDef* uart)
 {
-    if (uart == nullptr || uart->hdmarx == nullptr)
-    {
-        return HAL_ERROR;
-    }
-
     uart_ = uart;
     rxIndex_ = 0;
     memset(&decoder_, 0, sizeof(decoder_));
     state_ = ChaoheImuState{};
-    const HAL_StatusTypeDef status = BspUart::StartReceive(
-        uart_, rxBuf_, RX_BUF_NUM, this, nullptr, &ChaoheImu::HandleError);
-    if (status == HAL_OK)
+    const BspUart::ReceiveConfig config = {rxBuf_, RX_BUF_NUM, this, nullptr, &ChaoheImu::HandleError};
+    const HAL_StatusTypeDef status = BspUart::StartReceive(uart_, config);
+    if (status != HAL_OK)
     {
-        rxIndex_ = 0;
+        uart_ = nullptr;
     }
     return status;
 }
@@ -28,19 +29,17 @@ void ChaoheImu::Update()
 {
     DrainRx();
 
-    if (state_.validFrames != 0U &&
-        (HAL_GetTick() - state_.lastUpdateTick) > ONLINE_TIMEOUT_MS)
+    if (state_.validFrames != 0U && (HAL_GetTick() - state_.lastUpdateTick) > ONLINE_TIMEOUT_MS)
     {
         state_.online = false;
     }
 }
 
-void ChaoheImu::HandleError(void *context, UART_HandleTypeDef *uart)
+void ChaoheImu::HandleError(void* context, UART_HandleTypeDef* uart)
 {
     (void)uart;
-    ChaoheImu *self = static_cast<ChaoheImu *>(context);
-    self->rxIndex_ = 0;
-    memset(&self->decoder_, 0, sizeof(self->decoder_));
+    ChaoheImu* self = static_cast<ChaoheImu*>(context);
+    self->streamReset_ = true;
 }
 
 void ChaoheImu::DrainRx()
@@ -50,23 +49,38 @@ void ChaoheImu::DrainRx()
         return;
     }
 
-    const uint16_t pos = BspUart::WriteIndex(uart_, RX_BUF_NUM);
+    bool streamReset = false;
+    {
+        CriticalSection lock;
+        streamReset = streamReset_;
+        streamReset_ = false;
+    }
+    if (streamReset)
+    {
+        rxIndex_ = 0U;
+        decoder_ = {};
+        state_.online = false;
+    }
+    const uint16_t pos = BspUart::WriteIndex(uart_, RX_BUF_NUM) % RX_BUF_NUM;
 
     while (rxIndex_ != pos)
     {
         const uint8_t byte = rxBuf_[rxIndex_];
         rxIndex_ = static_cast<uint16_t>((rxIndex_ + 1U) % RX_BUF_NUM);
 
-        if (hipnuc_input(&decoder_, byte) > 0 &&
-            decoder_.hi91.tag == HIPNUC_ID_HI91)
+        if (hipnuc_input(&decoder_, byte) > 0 && decoder_.hi91.tag == HIPNUC_ID_HI91)
         {
             ApplyHi91(decoder_.hi91);
         }
     }
 }
 
-void ChaoheImu::ApplyHi91(const hi91_t &frame)
+void ChaoheImu::ApplyHi91(const hi91_t& frame)
 {
+    if (!isfinite(frame.yaw))
+    {
+        return;
+    }
     state_.roll = frame.roll;
     state_.pitch = frame.pitch;
     state_.yaw = frame.yaw;
@@ -88,5 +102,3 @@ void ChaoheImu::ApplyHi91(const hi91_t &frame)
     state_.lastUpdateTick = HAL_GetTick();
     state_.online = true;
 }
-
-/** @brief HAL 空闲接收完成回调：按串口分发给遥控器和 IMU。 */

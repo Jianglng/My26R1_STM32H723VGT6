@@ -1,113 +1,69 @@
+/**
+ * @file pid.h
+ * @brief 位置式 PID，调用者传入已验证且统一的毫秒周期
+ */
 #pragma once
 
 #include <stdint.h>
 
-/**
- * @brief PID 可选功能，可按位或。
- * @note 输出限幅始终生效。
- */
+#include "math_utils.h"
+
 enum PidImprove
 {
-    PID_IMPROVE_NONE           = 0x00,  ///< 只用 P/I/D 和输出限幅。
-    PID_IMPROVE_INTEGRAL_LIMIT = 0x01   ///< 打开积分限幅，底盘环需要打开。
+    PID_IMPROVE_NONE = 0x00,
+    PID_IMPROVE_INTEGRAL_LIMIT = 0x01
 };
 
-/**
- * @brief 一组可直接交给 Pid::Init() 的参数。
- */
 struct PidParam
 {
-    float maxOut;          ///< 输出限幅，正负对称。
-    float integralLimit;   ///< 积分限幅，正负对称。
-    float deadband;        ///< 误差死区。
-    float kp;              ///< 比例系数。
-    float ki;              ///< 积分系数，与 dt(毫秒) 相乘。
-    float kd;              ///< 微分系数，与 dt(毫秒) 相除。
-    uint8_t improve;       ///< PidImprove 位掩码。
+    float maxOut;
+    float integralLimit;
+    float deadband;
+    float kp;
+    float ki;  // 积分使用 ms
+    float kd;  // 微分使用 ms
+    uint8_t improve;
 };
 
-/**
- * @brief 参数均为有限值、增益和限幅非负且输出限幅不超过 maxOutLimit 时返回 true。
- * @param maxOutLimit 允许的最大输出限幅，用于防止调参时误填过大的值。
- */
-bool PidParamValid(const PidParam &param, float maxOutLimit);
+/** @brief 编译期检查默认参数，运行时仅在 Watch 参数应用处检查 */
+constexpr bool PidParamValid(const PidParam& p, float maxOutLimit)
+{
+    return p.maxOut > 0.0f && p.maxOut <= maxOutLimit && p.integralLimit >= 0.0f &&
+           MathUtils::Finite(p.integralLimit) && p.deadband >= 0.0f && MathUtils::Finite(p.deadband) && p.kp >= 0.0f &&
+           MathUtils::Finite(p.kp) && p.ki >= 0.0f && MathUtils::Finite(p.ki) && p.kd >= 0.0f &&
+           MathUtils::Finite(p.kd) && (p.improve & ~PID_IMPROVE_INTEGRAL_LIMIT) == 0;
+}
 
-/**
- * @brief 单路 PID 的参数和运行状态。
- * @note 调试时 Watch 对象的 state_。dt 单位是毫秒，1 kHz 时应接近 1。
- */
 struct PidState
 {
-    float ref;             ///< 目标值。
-    float kp;              ///< 比例系数。
-    float ki;              ///< 积分系数。
-    float kd;              ///< 微分系数。
-
-    float measure;         ///< 当前测量值。
-    float err;             ///< 当前误差 = 目标 - 测量。
-    float lastErr;         ///< 上次误差，给微分用。
-
-    float pOut;            ///< 比例项。
-    float iOut;            ///< 积分项累计。
-    float dOut;            ///< 微分项。
-    float iTerm;           ///< 本周期积分增量。
-
-    float output;          ///< 本周期总输出。
-
-    float deadband;        ///< 误差死区。
-    float maxOut;          ///< 输出限幅。
-    float integralLimit;   ///< 积分限幅。
-
-    uint32_t dwtCnt;       ///< 上次计算时的 DWT 周期计数。
-    float dt;              ///< 距上次计算的时间间隔，单位毫秒。
-
-    uint8_t improve;       ///< PidImprove 位掩码。
+    float ref = 0.0f;
+    float measure = 0.0f;
+    float err = 0.0f;
+    float lastErr = 0.0f;
+    float pOut = 0.0f;
+    float iOut = 0.0f;
+    float dOut = 0.0f;
+    float iTerm = 0.0f;
+    float output = 0.0f;
+    float dtMs = 0.0f;
 };
-
-/**
- * @brief 位置式 PID，时间间隔由 DWT 实测后换成毫秒。
- *
- * 输出饱和且误差仍朝同一方向时停止积分。
- * 6020 角度环请用 CalculateEncoder()，避免编码器过零打满。
- */
-class DwtTimer;
 
 class Pid
 {
 public:
-    PidState state_;   ///< 公开状态，方便调试器展开观察。
-
-    Pid();
-
-    /**
-     * @brief 写入参数并清零积分、误差历史。
-     * @param param 例如 RobotConfig::STEER_ANGLE、RobotConfig::STEER_SPEED。
-     */
-    void Init(const PidParam &param, DwtTimer &timer);
-
-    /** @brief 清零积分和输出。遥控器离线时应调用。 */
+    void Init(const PidParam& param);
     void Reset();
-
-    /**
-     * @brief 普通 PID，给速度环用。
-     * @param measure 当前测量值。
-     * @param ref 目标值。
-     * @return 限幅后的输出。
-     */
-    float Calculate(float measure, float ref);
-
-    /**
-     * @brief 带编码器过零的 PID，给 6020 角度环用。
-     * @param measure 当前编码器。
-     * @param ref 目标编码器。
-     * @param encoderRange 一圈刻度，6020 为 8192。
-     * @return 限幅后的输出。
-     */
-    float CalculateEncoder(float measure, float ref, float encoderRange);
+    /** @brief 已验证的测量和目标，dtMs 由应用层统一限制在 [0.2, 5] ms */
+    float Calculate(float measure, float ref, float dtMs);
+    /** @brief 编码器周期误差，量程由机械配置保证为正 */
+    float CalculateEncoder(float measure, float ref, float encoderRange, float dtMs);
+    const PidState& State() const { return state_; }
+    const PidParam& Param() const { return param_; }
 
 private:
-    DwtTimer* timer_ = nullptr;
+    float Run(float err, float dtMs);
     void ApplyIntegralLimit();
-    void ApplyOutputLimit();
-    float Run(float err);
+
+    PidParam param_ = {};
+    PidState state_ = {};
 };
