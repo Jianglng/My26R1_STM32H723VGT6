@@ -17,7 +17,7 @@ namespace LocalizationConfig
     /* 车体坐标系中，从实测旋转中心指向雷达中心的安装偏移 (m)
      * 雷达在旋转中心前方 0.4636 m、左方 0.0160 m，两个分量均为正
      * yaw 偏移为雷达坐标轴相对车体坐标轴的逆时针角度，配置使用度 */
-    constexpr float LIDAR_OFFSET_X_M = 0.4636f;
-    constexpr float LIDAR_OFFSET_Y_M = 0.0160f;
+    constexpr float LIDAR_OFFSET_X_M = 0.4416f;
+    constexpr float LIDAR_OFFSET_Y_M = 0.0f;
     constexpr float LIDAR_YAW_OFFSET_DEG = 0.0f;
 }  // namespace LocalizationConfig

@@ -37,21 +37,21 @@ namespace AutoMoveConfig
     constexpr AutoMoveTune MakeLidarDefault()
     {
         AutoMoveTune p = {};
-        p.maxVelocity = 3.0f;
-        p.acceleration = 1.0f;
-        p.deceleration = 0.8f;
+        p.maxVelocity = 4.0f;
+        p.acceleration = 2.5f;
+        p.deceleration = 2.0f;
         p.trackingAlongKp = 0.1f;
         p.trackingAlongKd = 0.0f;
-        p.settlingAlongKp = 0.5f;
-        p.settlingAlongKd = 0.2f;
-        p.crossKp = 1.0f;
-        p.yawKp = 2.2f;
+        p.settlingAlongKp = 1.2f;
+        p.settlingAlongKd = 0.01f;
+        p.crossKp = 1.2f;
+        p.yawKp = 1.8f;
         p.maxCorrectionVelocity = 2.0f;
         p.maxOutputVelocity = 5.0f;
-        p.maxYawVelocityDegPerSec = 60.0f;
-        p.yawAccelerationDegPerSec2 = 60.0f;
-        p.positionTolerance = 0.01f;
-        p.yawToleranceDeg = 1.0f;
+        p.maxYawVelocityDegPerSec = 150.0f;
+        p.yawAccelerationDegPerSec2 = 130.0f;
+        p.positionTolerance = 0.02f;
+        p.yawToleranceDeg = 2.0f;
         p.speedTolerance = 0.02f;
         p.yawSpeedToleranceDegPerSec = 1.1459f;
         p.settleDuration = 0.2f;

@@ -2346,7 +2346,7 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>task</GroupName>
+          <GroupName>Task</GroupName>
           <Files>
             <File>
               <FileName>chassis_task.cpp</FileName>
