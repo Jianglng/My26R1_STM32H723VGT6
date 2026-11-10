@@ -45,7 +45,7 @@ options:
             <virtual_root>/Middlewares/USB_Device_Library/usbd_ctlreq.c: ""
             <virtual_root>/Middlewares/USB_Device_Library/usbd_ioreq.c: ""
             <virtual_root>/Middlewares/USB_Device_Library/usbd_cdc.c: ""
-            <virtual_root>/task/chassis_task.cpp: -Wall -Wextra
+            <virtual_root>/Task/chassis_task.cpp: -Wall -Wextra
             <virtual_root>/bsp/bsp_can.cpp: -Wall -Wextra
             <virtual_root>/protocol/vesc/vesc_motor.cpp: -Wall -Wextra
             <virtual_root>/chassis/chassis.cpp: -Wall -Wextra

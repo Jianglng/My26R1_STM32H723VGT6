@@ -10,6 +10,9 @@ compile_flags.txt
 /build/
 /tests/build/
 
+# 本地开发文档，不提交到仓库。
+/docs/
+
 # 编辑器临时文件、备份和合并残留。
 *.user
 *.suo
@@ -34,4 +37,4 @@ __pycache__/
 Thumbs.db
 Desktop.ini
 
-# 源码、测试、文档、CubeMX 配置及共享工程配置均正常提交。
+# 源码、测试、README、CubeMX 配置及共享工程配置正常提交。
